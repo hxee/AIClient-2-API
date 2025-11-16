@@ -614,6 +614,7 @@ export async function handleUnaryRequest(res, service, model, requestBody, fromP
  */
 export async function handleModelListRequest(req, res, service, endpointType, CONFIG, providerPoolManager, pooluuid) {
     try{
+        const startTime = Date.now();
         const clientProviderMap = {
             [ENDPOINT_TYPE.OPENAI_MODEL_LIST]: MODEL_PROTOCOL_PREFIX.OPENAI,
             [ENDPOINT_TYPE.GEMINI_MODEL_LIST]: MODEL_PROTOCOL_PREFIX.GEMINI,
@@ -627,57 +628,7 @@ export async function handleModelListRequest(req, res, service, endpointType, CO
 
         console.log(`\n[ModelList] Starting model list request for format: ${fromProvider}`);
 
-        // Helper function to fetch and process models from a provider with timeout
-        const fetchProviderModels = async (providerType, providerService, providerInfo = {}) => {
-            const timeout = 3000; // 3 second timeout per provider
-            const startTime = Date.now();
-            
-            console.log(`[ModelList] Fetching models from ${providerType}...`);
-            
-            const fetchPromise = (async () => {
-                try {
-                    const models = await providerService.listModels();
-                    const elapsed = Date.now() - startTime;
-                    
-                    // Convert if necessary
-                    let converted = models;
-                    if (!getProtocolPrefix(providerType).includes(getProtocolPrefix(fromProvider))) {
-                        converted = convertData(models, 'modelList', providerType, fromProvider);
-                    }
-                    
-                    // Determine format and add prefixes
-                    const format = fromProvider === MODEL_PROTOCOL_PREFIX.OPENAI ? 'openai' : 'gemini';
-                    let modelList = [];
-                    if (converted?.models) {
-                        modelList = addPrefixToModels(converted.models, providerType, format, providerInfo);
-                    } else if (converted?.data) {
-                        modelList = addPrefixToModels(converted.data, providerType, format, providerInfo);
-                    }
-                    
-                    console.log(`[ModelList] ✓ Successfully fetched ${modelList.length} models from ${providerType} (${elapsed}ms)`);
-                    return modelList;
-                } catch (error) {
-                    const elapsed = Date.now() - startTime;
-                    console.error(`[ModelList] ✗ Failed to fetch models from ${providerType} (${elapsed}ms): ${error.message}`);
-                    return [];
-                }
-            })();
-            
-            // Add timeout wrapper
-            const timeoutPromise = new Promise((resolve) => {
-                setTimeout(() => {
-                    console.error(`[ModelList] ✗ Timeout fetching models from ${providerType} after ${timeout}ms`);
-                    resolve([]);
-                }, timeout);
-            });
-            
-            return Promise.race([fetchPromise, timeoutPromise]);
-        };
-        
-        // Only fetch from provider_pools.json configured providers
-        const fetchPromises = [];
-        const providersList = [];
-        
+        // Check if provider pools are configured
         if (!providerPoolManager?.providerPools) {
             console.warn(`[ModelList] No provider pools configured. Please configure provider_pools.json`);
             res.writeHead(200, { 'Content-Type': 'application/json' });
@@ -685,82 +636,145 @@ export async function handleModelListRequest(req, res, service, endpointType, CO
             return;
         }
         
-        const { getServiceAdapter } = await import('./adapter.js');
+        // Load models from models.config
+        const { modelsConfigManager } = await import('./models-config-manager.js');
+        await modelsConfigManager.ensureConfigLoaded();
+        
+        const allModels = [];
+        const format = fromProvider === MODEL_PROTOCOL_PREFIX.OPENAI ? 'openai' : 'gemini';
+        
+        // Map provider types to models.config keys
+        const providerTypeMapping = {
+            'gemini-cli-oauth': 'gemini-cli',
+            'gemini-cli': 'gemini-cli',
+            'openai-custom': 'openai-custom',
+            'openai-qwen-oauth': 'qwen-api',
+            'qwen-api': 'qwen-api',
+            'claude-custom': 'claude-custom',
+            'claude-kiro-oauth': 'claude-kiro',
+            'kiro-api': 'claude-kiro',
+            'openaiResponses-custom': 'openai-responses',
+            'openai-responses': 'openai-responses'
+        };
         
         console.log(`[ModelList] Configured providers in provider_pools.json:`, Object.keys(providerPoolManager.providerPools));
         
-        // Fetch only from provider pools
+        // Iterate through provider pools and add models from models.config
         for (const [providerType, providers] of Object.entries(providerPoolManager.providerPools)) {
-            // Find healthy and enabled provider
+            // Find healthy and enabled providers
             const healthyProviders = providers.filter(p => p.isHealthy && !p.isDisabled);
             
             if (healthyProviders.length === 0) {
-                console.warn(`[ModelList] ⚠ ${providerType}: No healthy providers available (total: ${providers.length}, healthy: 0)`);
+                console.log(`[ModelList] ⚠ ${providerType}: No healthy providers available (total: ${providers.length}, healthy: 0)`);
                 continue;
             }
             
             console.log(`[ModelList] ${providerType}: Found ${healthyProviders.length} healthy provider(s)`);
             
-            // Use the first healthy provider
-            const healthyProvider = healthyProviders[0];
+            // Map to models.config provider key
+            const configProviderKey = providerTypeMapping[providerType] || providerType;
             
             try {
-                const tempConfig = { ...CONFIG, ...healthyProvider, MODEL_PROVIDER: providerType };
-                const tempService = getServiceAdapter(tempConfig);
-                providersList.push(providerType);
-                fetchPromises.push(fetchProviderModels(providerType, tempService, healthyProvider));
+                // Get models from models.config for this provider
+                const providerModels = await modelsConfigManager.getModelsForProvider(configProviderKey);
+                
+                if (!providerModels || providerModels.length === 0) {
+                    console.warn(`[ModelList] No models found in models.config for ${configProviderKey}`);
+                    continue;
+                }
+                
+                // Use the first healthy provider for prefix info
+                const healthyProvider = healthyProviders[0];
+                
+                // Convert models to the required format
+                let formattedModels = providerModels.map(model => {
+                    if (format === 'openai') {
+                        return {
+                            id: model.id,
+                            object: 'model',
+                            created: Math.floor(Date.now() / 1000),
+                            owned_by: configProviderKey
+                        };
+                    } else {
+                        // Gemini format
+                        return {
+                            name: model.id,
+                            displayName: model.name || model.id,
+                            description: model.description || '',
+                            supportedGenerationMethods: ['generateContent', 'streamGenerateContent']
+                        };
+                    }
+                });
+                
+                // Add provider prefixes
+                formattedModels = addPrefixToModels(formattedModels, providerType, format, healthyProvider);
+                
+                // 修改 chat 模型显示名称：去掉 "-供应商" 后缀，只保留 "chat"
+                if (providerType.includes('openai') || providerType.includes('qwen')) {
+                    formattedModels = formattedModels.map(model => {
+                        if (format === 'openai' && model.id) {
+                            // 匹配 [xxx] 格式的前缀
+                            const match = model.id.match(/^(\[.*?\])\s+(.+)$/);
+                            if (match) {
+                                const prefix = match[1];
+                                const modelName = match[2];
+                                // 如果前缀包含 "chat-" 或以 "chat-" 开头，简化为 [chat]
+                                if (prefix.toLowerCase().includes('chat-')) {
+                                    model.id = `[chat] ${modelName}`;
+                                }
+                            }
+                        } else if (model.name) {
+                            // Gemini format
+                            const match = model.name.match(/^(\[.*?\])\s+(.+)$/);
+                            if (match) {
+                                const prefix = match[1];
+                                const modelName = match[2];
+                                if (prefix.toLowerCase().includes('chat-')) {
+                                    model.name = `[chat] ${modelName}`;
+                                    if (model.displayName) {
+                                        model.displayName = `[chat] ${modelName}`;
+                                    }
+                                }
+                            }
+                        }
+                        return model;
+                    });
+                }
+                
+                allModels.push(...formattedModels);
+                console.log(`[ModelList] ✓ Added ${formattedModels.length} models from ${providerType}`);
+                
             } catch (error) {
-                console.error(`[ModelList] ✗ Failed to initialize service for ${providerType}: ${error.message}`);
+                console.error(`[ModelList] ✗ Failed to load models for ${providerType}: ${error.message}`);
             }
         }
         
-        if (fetchPromises.length === 0) {
-            console.warn(`[ModelList] No providers available to fetch models from`);
-            res.writeHead(200, { 'Content-Type': 'application/json' });
-            res.end(JSON.stringify(fromProvider === MODEL_PROTOCOL_PREFIX.OPENAI ? { object: 'list', data: [] } : { models: [] }));
-            return;
-        }
-        
-        console.log(`[ModelList] Fetching models from ${fetchPromises.length} provider(s): ${providersList.join(', ')}`);
-        
-        // Execute all fetches in parallel with Promise.allSettled to handle failures gracefully
-        const results = await Promise.allSettled(fetchPromises);
-        const allModels = results
-            .filter(r => r.status === 'fulfilled')
-            .map(r => r.value)
-            .flat();
-        
-        // Log any rejections
-        const rejectedCount = results.filter(r => r.status === 'rejected').length;
-        if (rejectedCount > 0) {
-            console.error(`[ModelList] ${rejectedCount} provider(s) failed to fetch models`);
-            results
-                .filter(r => r.status === 'rejected')
-                .forEach((r, idx) => console.error(`[ModelList] Provider ${idx + 1} rejection:`, r.reason));
-        }
-        
-        // 3. Build final response in the correct format
+        // Build final response
         let finalResponse;
         if (fromProvider === MODEL_PROTOCOL_PREFIX.OPENAI) {
-            // OpenAI format
             finalResponse = {
                 object: 'list',
                 data: allModels
             };
         } else {
-            // Gemini/Claude format
             finalResponse = {
                 models: allModels
             };
         }
 
-        console.log(`[ModelList] ✓ Total models collected: ${allModels.length} from ${providersList.length} provider(s)`);
+        const elapsed = Date.now() - startTime;
+        console.log(`[ModelList] ✓ Total models collected: ${allModels.length} from ${Object.keys(providerPoolManager.providerPools).length} provider type(s) (${elapsed}ms)`);
         console.log(`[ModelList] Sending response to client\n`);
         
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify(finalResponse));
     } catch (error) {
-        console.error('\n[Server] Error during model list processing:', error.stack);    }
+        console.error('\n[Server] Error during model list processing:', error.stack);
+        if (!res.headersSent) {
+            res.writeHead(500, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: { message: error.message } }));
+        }
+    }
 }
 
 /**
