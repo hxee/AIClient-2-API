@@ -63,13 +63,28 @@ export class ProviderPoolManager {
     selectProvider(providerType, preferredUuid = null, requestedModel = null) {
         const availableProviders = this.providerStatus[providerType] || [];
         
-        // 过滤健康且启用的提供商，如果请求的是 openai-chat-X 模型，还要检查是否配置了映射
+        // 过滤健康且启用的提供商，如果请求的是 openai-custom 模型，要检查映射
         const availableAndHealthyProviders = availableProviders.filter(p => {
             if (!p.config.isHealthy || p.config.isDisabled) {
                 return false;
             }
+
+            // openai-custom 类型模型映射逻辑
+            if (providerType === 'openai-custom' && requestedModel) {
+                // 如果提供商配置了 modelMapping，检查映射是否存在，否则跳过
+                if (p.config.modelMapping) {
+                    if (!p.config.modelMapping[requestedModel]) {
+                        console.log(`[ProviderPoolManager] Skipping ${p.uuid}: No mapping for requested model ${requestedModel}`);
+                        return false;
+                    }
+                } else {
+                    // 未配置映射，则跳过
+                    console.log(`[ProviderPoolManager] Skipping ${p.uuid}: No modelMapping configured`);
+                    return false;
+                }
+            }
             
-            // 如果请求的是 openai-chat-X 模型，检查是否配置了映射
+            // 如果请求的是 openai-chat-X 模型，已有逻辑继续保留
             if (requestedModel && requestedModel.startsWith('openai-chat-')) {
                 if (!p.config.modelMapping || !p.config.modelMapping[requestedModel]) {
                     console.log(`[ProviderPoolManager] Skipping ${p.uuid}: No mapping for ${requestedModel}`);

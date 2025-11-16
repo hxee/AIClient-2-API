@@ -994,6 +994,186 @@ export async function handleUIApiRequests(method, pathParam, req, res, currentCo
         }
     }
 
+    // Model mapping management for openai-custom providers
+    // Get model mappings for a specific provider
+    const getModelMappingMatch = pathParam.match(/^\/api\/providers\/([^\/]+)\/([^\/]+)\/model-mapping$/);
+    if (method === 'GET' && getModelMappingMatch) {
+        const providerType = decodeURIComponent(getModelMappingMatch[1]);
+        const providerUuid = getModelMappingMatch[2];
+        
+        try {
+            const filePath = currentConfig.PROVIDER_POOLS_FILE_PATH || 'provider_pools.json';
+            let providerPools = {};
+            
+            if (existsSync(filePath)) {
+                const fileContent = readFileSync(filePath, 'utf8');
+                providerPools = JSON.parse(fileContent);
+            }
+            
+            const providers = providerPools[providerType] || [];
+            const provider = providers.find(p => p.uuid === providerUuid);
+            
+            if (!provider) {
+                res.writeHead(404, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: { message: 'Provider not found' } }));
+                return true;
+            }
+            
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({
+                success: true,
+                modelMapping: provider.modelMapping || {}
+            }));
+            return true;
+        } catch (error) {
+            res.writeHead(500, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: { message: error.message } }));
+            return true;
+        }
+    }
+    
+    // Add or update model mapping
+    if (method === 'POST' && getModelMappingMatch) {
+        const providerType = decodeURIComponent(getModelMappingMatch[1]);
+        const providerUuid = getModelMappingMatch[2];
+        
+        try {
+            const body = await parseRequestBody(req);
+            const { clientModel, providerModel } = body;
+            
+            if (!clientModel || !providerModel) {
+                res.writeHead(400, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: { message: 'clientModel and providerModel are required' } }));
+                return true;
+            }
+            
+            const filePath = currentConfig.PROVIDER_POOLS_FILE_PATH || 'provider_pools.json';
+            let providerPools = {};
+            
+            if (existsSync(filePath)) {
+                const fileContent = readFileSync(filePath, 'utf8');
+                providerPools = JSON.parse(fileContent);
+            }
+            
+            const providers = providerPools[providerType] || [];
+            const providerIndex = providers.findIndex(p => p.uuid === providerUuid);
+            
+            if (providerIndex === -1) {
+                res.writeHead(404, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: { message: 'Provider not found' } }));
+                return true;
+            }
+            
+            if (!providers[providerIndex].modelMapping) {
+                providers[providerIndex].modelMapping = {};
+            }
+            
+            providers[providerIndex].modelMapping[clientModel] = providerModel;
+            
+            writeFileSync(filePath, JSON.stringify(providerPools, null, 2), 'utf8');
+            console.log(`[UI API] Added model mapping for ${providerUuid}: ${clientModel} -> ${providerModel}`);
+            
+            if (providerPoolManager) {
+                providerPoolManager.providerPools = providerPools;
+                providerPoolManager.initializeProviderStatus();
+            }
+            
+            CONFIG.providerPools = providerPools;
+            
+            broadcastEvent('config_update', {
+                action: 'update_model_mapping',
+                filePath: filePath,
+                providerType,
+                providerUuid,
+                timestamp: new Date().toISOString()
+            });
+            
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({
+                success: true,
+                message: 'Model mapping added successfully',
+                modelMapping: providers[providerIndex].modelMapping
+            }));
+            return true;
+        } catch (error) {
+            res.writeHead(500, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: { message: error.message } }));
+            return true;
+        }
+    }
+    
+    // Delete model mapping
+    if (method === 'DELETE' && getModelMappingMatch) {
+        const providerType = decodeURIComponent(getModelMappingMatch[1]);
+        const providerUuid = getModelMappingMatch[2];
+        
+        try {
+            const body = await parseRequestBody(req);
+            const { clientModel } = body;
+            
+            if (!clientModel) {
+                res.writeHead(400, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: { message: 'clientModel is required' } }));
+                return true;
+            }
+            
+            const filePath = currentConfig.PROVIDER_POOLS_FILE_PATH || 'provider_pools.json';
+            let providerPools = {};
+            
+            if (existsSync(filePath)) {
+                const fileContent = readFileSync(filePath, 'utf8');
+                providerPools = JSON.parse(fileContent);
+            }
+            
+            const providers = providerPools[providerType] || [];
+            const providerIndex = providers.findIndex(p => p.uuid === providerUuid);
+            
+            if (providerIndex === -1) {
+                res.writeHead(404, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: { message: 'Provider not found' } }));
+                return true;
+            }
+            
+            if (!providers[providerIndex].modelMapping || !providers[providerIndex].modelMapping[clientModel]) {
+                res.writeHead(404, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: { message: 'Model mapping not found' } }));
+                return true;
+            }
+            
+            delete providers[providerIndex].modelMapping[clientModel];
+            
+            writeFileSync(filePath, JSON.stringify(providerPools, null, 2), 'utf8');
+            console.log(`[UI API] Deleted model mapping for ${providerUuid}: ${clientModel}`);
+            
+            if (providerPoolManager) {
+                providerPoolManager.providerPools = providerPools;
+                providerPoolManager.initializeProviderStatus();
+            }
+            
+            CONFIG.providerPools = providerPools;
+            
+            broadcastEvent('config_update', {
+                action: 'delete_model_mapping',
+                filePath: filePath,
+                providerType,
+                providerUuid,
+                timestamp: new Date().toISOString()
+            });
+            
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({
+                success: true,
+                message: 'Model mapping deleted successfully',
+                modelMapping: providers[providerIndex].modelMapping
+            }));
+            return true;
+        } catch (error) {
+            res.writeHead(500, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: { message: error.message } }));
+            return true;
+        }
+    }
+
     // Server-Sent Events for real-time updates
     if (method === 'GET' && pathParam === '/api/events') {
         res.writeHead(200, {

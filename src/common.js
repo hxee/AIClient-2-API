@@ -841,9 +841,22 @@ export async function handleContentGenerationRequest(req, res, service, endpoint
     const providerSelection = getProviderByModelName(rawModel, providerPoolManager, CONFIG.MODEL_PROVIDER);
     const toProvider = providerSelection.providerType || CONFIG.MODEL_PROVIDER;
     const selectedProviderUuid = providerSelection.providerConfig?.uuid;
+    const selectedProviderConfig = providerSelection.providerConfig;
     
     // Remove prefix from model name before sending to backend
-    const model = removeModelPrefix(rawModel);
+    let model = removeModelPrefix(rawModel);
+    
+    // 3. Apply model mapping for openai-custom providers
+    if (toProvider === 'openai-custom' && selectedProviderConfig && selectedProviderConfig.modelMapping) {
+        const mappedModel = selectedProviderConfig.modelMapping[model];
+        if (mappedModel) {
+            console.log(`[Model Mapping] Mapping ${model} -> ${mappedModel} for provider ${selectedProviderUuid}`);
+            model = mappedModel;
+        } else {
+            console.warn(`[Model Mapping] No mapping found for model ${model} in provider ${selectedProviderUuid}`);
+        }
+    }
+    
     console.log(`[Model Processing] Raw model: ${rawModel}, Clean model: ${model}`);
     console.log(`[Provider Selection] Model: ${model}, Selected provider: ${toProvider}${selectedProviderUuid ? ` (uuid: ${selectedProviderUuid})` : ''}`);
 

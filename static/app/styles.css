@@ -2888,3 +2888,404 @@ input:checked + .toggle-slider:before {
         padding: 0.4rem 0.6rem;
     }
 }
+
+/* 模型映射区域样式 */
+.model-mapping-section {
+    margin-top: 1.5rem;
+    padding: 1.5rem;
+    background: linear-gradient(135deg, #f0f9ff 0%, #ffffff 100%);
+    border: 1px solid #bae6fd;
+    border-radius: 0.75rem;
+    border-left: 4px solid #0ea5e9;
+}
+
+.model-mapping-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1.25rem;
+    padding-bottom: 0.75rem;
+    border-bottom: 2px solid #e0f2fe;
+}
+
+.model-mapping-header h4 {
+    margin: 0;
+    font-size: 1.125rem;
+    font-weight: 600;
+    color: #0c4a6e;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.model-mapping-header h4 i {
+    color: #0ea5e9;
+    font-size: 1rem;
+}
+
+.btn-add-mapping {
+    background: linear-gradient(135deg, #0ea5e9 0%, #0284c7 100%);
+    color: white;
+    border: none;
+    padding: 0.5rem 1rem;
+    border-radius: 0.5rem;
+    cursor: pointer;
+    font-size: 0.875rem;
+    font-weight: 500;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    transition: all 0.3s ease;
+    box-shadow: 0 2px 8px rgba(14, 165, 233, 0.3);
+}
+
+.btn-add-mapping:hover {
+    background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(14, 165, 233, 0.4);
+}
+
+.btn-add-mapping:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    transform: none;
+    box-shadow: none;
+}
+
+.model-mapping-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.model-mapping-item {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 1rem;
+    background: white;
+    border: 1px solid #e0f2fe;
+    border-radius: 0.5rem;
+    transition: all 0.3s ease;
+}
+
+.model-mapping-item:hover {
+    border-color: #0ea5e9;
+    box-shadow: 0 2px 8px rgba(14, 165, 233, 0.15);
+    transform: translateX(2px);
+}
+
+.mapping-arrow {
+    color: #0ea5e9;
+    font-size: 1.25rem;
+    font-weight: bold;
+    flex-shrink: 0;
+}
+
+.mapping-model {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+.mapping-label {
+    font-size: 0.75rem;
+    color: #64748b;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.mapping-value {
+    font-size: 0.9rem;
+    color: #0f172a;
+    font-weight: 600;
+    font-family: 'Courier New', monospace;
+    padding: 0.25rem 0.5rem;
+    background: #f8fafc;
+    border-radius: 0.25rem;
+    border: 1px solid #e2e8f0;
+}
+
+.mapping-actions {
+    display: flex;
+    gap: 0.5rem;
+    flex-shrink: 0;
+}
+
+.btn-edit-mapping,
+.btn-delete-mapping {
+    padding: 0.375rem 0.75rem;
+    border: none;
+    border-radius: 0.375rem;
+    cursor: pointer;
+    font-size: 0.75rem;
+    font-weight: 500;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    transition: all 0.3s ease;
+}
+
+.btn-edit-mapping {
+    background: linear-gradient(135deg, #059669 0%, #10b981 100%);
+    color: white;
+    box-shadow: 0 2px 6px rgba(5, 150, 105, 0.3);
+}
+
+.btn-edit-mapping:hover {
+    background: linear-gradient(135deg, #047857 0%, #059669 100%);
+    transform: translateY(-1px);
+    box-shadow: 0 3px 9px rgba(5, 150, 105, 0.4);
+}
+
+.btn-delete-mapping {
+    background: linear-gradient(135deg, #dc3545 0%, #c82333 100%);
+    color: white;
+    box-shadow: 0 2px 6px rgba(220, 53, 69, 0.3);
+}
+
+.btn-delete-mapping:hover {
+    background: linear-gradient(135deg, #c82333 0%, #bd2130 100%);
+    transform: translateY(-1px);
+    box-shadow: 0 3px 9px rgba(220, 53, 69, 0.4);
+}
+
+.model-mapping-empty {
+    padding: 2rem;
+    text-align: center;
+    color: #64748b;
+    font-size: 0.875rem;
+    background: white;
+    border: 2px dashed #cbd5e1;
+    border-radius: 0.5rem;
+}
+
+.model-mapping-empty i {
+    font-size: 2rem;
+    color: #cbd5e1;
+    margin-bottom: 0.75rem;
+}
+
+.model-mapping-empty p {
+    margin: 0.5rem 0 0 0;
+}
+
+/* 添加映射表单样式 */
+.add-mapping-form {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    padding: 1.25rem;
+    background: white;
+    border: 2px solid #0ea5e9;
+    border-radius: 0.5rem;
+    margin-bottom: 1rem;
+    box-shadow: 0 4px 12px rgba(14, 165, 233, 0.2);
+}
+
+.mapping-form-row {
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    gap: 1rem;
+    align-items: end;
+}
+
+.mapping-form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.mapping-form-group label {
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: #0c4a6e;
+    display: flex;
+    align-items: center;
+    gap: 0.375rem;
+}
+
+.mapping-form-group label i {
+    color: #0ea5e9;
+    font-size: 0.875rem;
+}
+
+.mapping-form-group select,
+.mapping-form-group input {
+    padding: 0.75rem;
+    border: 2px solid #e0f2fe;
+    border-radius: 0.5rem;
+    font-size: 0.875rem;
+    font-family: 'Courier New', monospace;
+    background: white;
+    transition: all 0.3s ease;
+}
+
+.mapping-form-group select:focus,
+.mapping-form-group input:focus {
+    outline: none;
+    border-color: #0ea5e9;
+    box-shadow: 0 0 0 3px rgba(14, 165, 233, 0.1);
+}
+
+.mapping-form-arrow {
+    color: #0ea5e9;
+    font-size: 1.5rem;
+    font-weight: bold;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding-bottom: 0.5rem;
+}
+
+.mapping-form-actions {
+    display: flex;
+    gap: 0.75rem;
+    justify-content: flex-end;
+    padding-top: 0.5rem;
+    border-top: 1px solid #e0f2fe;
+}
+
+.btn-save-mapping {
+    background: linear-gradient(135deg, #0ea5e9 0%, #0284c7 100%);
+    color: white;
+    border: none;
+    padding: 0.625rem 1.25rem;
+    border-radius: 0.5rem;
+    cursor: pointer;
+    font-size: 0.875rem;
+    font-weight: 600;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    transition: all 0.3s ease;
+    box-shadow: 0 2px 8px rgba(14, 165, 233, 0.3);
+}
+
+.btn-save-mapping:hover {
+    background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(14, 165, 233, 0.4);
+}
+
+.btn-cancel-mapping {
+    background: linear-gradient(135deg, #6c757d 0%, #495057 100%);
+    color: white;
+    border: none;
+    padding: 0.625rem 1.25rem;
+    border-radius: 0.5rem;
+    cursor: pointer;
+    font-size: 0.875rem;
+    font-weight: 600;
+    transition: all 0.3s ease;
+    box-shadow: 0 2px 8px rgba(108, 117, 125, 0.3);
+}
+
+.btn-cancel-mapping:hover {
+    background: linear-gradient(135deg, #5a6268 0%, #343a40 100%);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(108, 117, 125, 0.4);
+}
+
+/* 编辑模式下的映射项样式 */
+.model-mapping-item.editing {
+    border: 2px solid #0ea5e9;
+    background: linear-gradient(135deg, #f0f9ff 0%, #ffffff 100%);
+    box-shadow: 0 4px 12px rgba(14, 165, 233, 0.2);
+}
+
+.model-mapping-item.editing .mapping-value {
+    border-color: #0ea5e9;
+    background: white;
+}
+
+/* 响应式调整 */
+@media (max-width: 768px) {
+    .model-mapping-header {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 1rem;
+    }
+    
+    .btn-add-mapping {
+        width: 100%;
+        justify-content: center;
+    }
+    
+    .model-mapping-item {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    
+    .mapping-arrow {
+        transform: rotate(90deg);
+        align-self: center;
+        margin: 0.5rem 0;
+    }
+    
+    .mapping-actions {
+        width: 100%;
+        justify-content: center;
+        margin-top: 0.5rem;
+        padding-top: 0.75rem;
+        border-top: 1px solid #e0f2fe;
+    }
+    
+    .mapping-form-row {
+        grid-template-columns: 1fr;
+    }
+    
+    .mapping-form-arrow {
+        transform: rotate(90deg);
+        padding: 0;
+        margin: -0.5rem 0;
+    }
+    
+    .mapping-form-actions {
+        flex-direction: column;
+    }
+    
+    .btn-save-mapping,
+    .btn-cancel-mapping {
+        width: 100%;
+        justify-content: center;
+    }
+}
+
+/* 模型映射提示信息 */
+.mapping-hint {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.75rem;
+    padding: 1rem;
+    background: linear-gradient(135deg, #fef3c7 0%, #ffffff 100%);
+    border: 1px solid #fed7aa;
+    border-left: 4px solid #f59e0b;
+    border-radius: 0.5rem;
+    margin-bottom: 1rem;
+    font-size: 0.875rem;
+    color: #92400e;
+    line-height: 1.5;
+}
+
+.mapping-hint i {
+    color: #f59e0b;
+    font-size: 1.125rem;
+    flex-shrink: 0;
+    margin-top: 0.125rem;
+}
+
+.mapping-hint-content p {
+    margin: 0 0 0.5rem 0;
+}
+
+.mapping-hint-content p:last-child {
+    margin-bottom: 0;
+}
+
+.mapping-hint-content strong {
+    color: #78350f;
+    font-weight: 600;
+}

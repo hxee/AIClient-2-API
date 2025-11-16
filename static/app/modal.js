@@ -222,6 +222,11 @@ function renderProviderConfig(provider) {
     // 获取字段映射，确保顺序一致
     const fieldOrder = getFieldOrder(provider);
     
+    // 检查是否为 openai-custom 提供商
+    const modal = document.querySelector('.provider-modal');
+    const providerType = modal ? modal.getAttribute('data-provider-type') : '';
+    const isOpenAICustom = providerType === 'openai-custom';
+    
     // 先渲染基础配置字段（checkModelName 和 checkHealth）
     let html = '<div class="form-grid">';
     const baseFields = ['checkModelName', 'checkHealth'];
@@ -384,6 +389,77 @@ function renderProviderConfig(provider) {
         html += '</div>';
     }
     
+    // 如果是 openai-custom，添加模型映射部分
+    if (isOpenAICustom) {
+        html += renderModelMappingSection(provider);
+    }
+    
+    return html;
+}
+
+/**
+ * 渲染模型映射部分
+ * @param {Object} provider - 提供商对象
+ * @returns {string} HTML字符串
+ */
+function renderModelMappingSection(provider) {
+    const modelMapping = provider.modelMapping || {};
+    const mappingEntries = Object.entries(modelMapping);
+    
+    let html = `
+        <div class="model-mapping-section">
+            <div class="model-mapping-header">
+                <h4><i class="fas fa-exchange-alt"></i> 模型映射配置</h4>
+                <button class="btn btn-sm btn-primary" onclick="window.showAddMappingForm('${provider.uuid}')" disabled>
+                    <i class="fas fa-plus"></i> 添加映射
+                </button>
+            </div>
+            <div class="model-mapping-list" id="mapping-list-${provider.uuid}">
+    `;
+    
+    if (mappingEntries.length === 0) {
+        html += `
+            <div class="model-mapping-empty">
+                <i class="fas fa-info-circle"></i>
+                <p>暂无模型映射配置</p>
+                <small>点击"添加映射"按钮开始配置</small>
+            </div>
+        `;
+    } else {
+        mappingEntries.forEach(([clientModel, providerModel]) => {
+            html += `
+                <div class="model-mapping-item" data-client-model="${escapeHtml(clientModel)}">
+                    <div class="mapping-info">
+                        <div class="mapping-client-model">
+                            <label>客户端模型:</label>
+                            <span>${escapeHtml(clientModel)}</span>
+                        </div>
+                        <div class="mapping-arrow">
+                            <i class="fas fa-arrow-right"></i>
+                        </div>
+                        <div class="mapping-provider-model">
+                            <label>供应商模型:</label>
+                            <span>${escapeHtml(providerModel)}</span>
+                        </div>
+                    </div>
+                    <div class="mapping-actions">
+                        <button class="btn-icon btn-edit-mapping" onclick="window.editMapping('${provider.uuid}', '${escapeHtml(clientModel)}', '${escapeHtml(providerModel)}')" disabled title="编辑映射">
+                            <i class="fas fa-edit"></i>
+                        </button>
+                        <button class="btn-icon btn-delete-mapping" onclick="window.deleteMapping('${provider.uuid}', '${escapeHtml(clientModel)}')" disabled title="删除映射">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </div>
+                </div>
+            `;
+        });
+    }
+    
+    html += `
+            </div>
+        </div>
+    `;
+    
     return html;
 }
 
@@ -459,6 +535,12 @@ function editProvider(uuid, event) {
             select.disabled = false;
         });
         
+        // 启用模型映射按钮
+        const mappingButtons = providerDetail.querySelectorAll('.model-mapping-section button');
+        mappingButtons.forEach(button => {
+            button.disabled = false;
+        });
+        
         // 替换编辑按钮为保存和取消按钮，但保留禁用/启用按钮
         const actionsGroup = providerDetail.querySelector('.provider-actions-group');
         const toggleButton = actionsGroup.querySelector('[onclick*="toggleProviderStatus"]');
@@ -516,6 +598,12 @@ function cancelEdit(uuid, event) {
         // 恢复原始值
         const originalValue = select.dataset.configValue;
         select.value = originalValue || '';
+    });
+    
+    // 禁用模型映射按钮
+    const mappingButtons = providerDetail.querySelectorAll('.model-mapping-section button');
+    mappingButtons.forEach(button => {
+        button.disabled = true;
     });
     
     // 恢复原来的编辑和删除按钮，但保留禁用/启用按钮
@@ -1056,6 +1144,176 @@ async function toggleProviderStatus(uuid, event) {
     }
 }
 
+/**
+ * 显示添加模型映射表单
+ * @param {string} providerUuid - 提供商UUID
+ */
+async function showAddMappingForm(providerUuid) {
+    const modal = document.querySelector('.provider-modal');
+    const providerType = modal.getAttribute('data-provider-type');
+    
+    // 加载 models.config 中的模型列表
+    let availableModels = [];
+    try {
+        const modelsConfigResponse = await fetch('/models.config');
+        const modelsConfig = await modelsConfigResponse.json();
+        
+        if (modelsConfig.providers && modelsConfig.providers['openai-custom']) {
+            availableModels = modelsConfig.providers['openai-custom'].models || [];
+        }
+    } catch (error) {
+        console.error('Failed to load models config:', error);
+        showToast('加载模型配置失败', 'error');
+        return;
+    }
+    
+    // 创建添加映射表单
+    const mappingList = document.getElementById(`mapping-list-${providerUuid}`);
+    const existingForm = mappingList.querySelector('.add-mapping-form');
+    
+    if (existingForm) {
+        existingForm.remove();
+        return;
+    }
+    
+    const formHtml = `
+        <div class="add-mapping-form" style="background: #f8f9fa; padding: 15px; border-radius: 8px; margin-bottom: 15px;">
+            <h5 style="margin: 0 0 15px 0;"><i class="fas fa-plus-circle"></i> 添加新映射</h5>
+            <div class="form-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                <div class="form-group">
+                    <label style="display: block; margin-bottom: 5px; font-weight: 500;">客户端模型 <span class="required-mark" style="color: #e74c3c;">*</span></label>
+                    <select id="new-client-model-${providerUuid}" class="form-control" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+                        <option value="">-- 选择模型 --</option>
+                        ${availableModels.map(m => `<option value="${escapeHtml(m.id)}">${escapeHtml(m.name || m.id)}</option>`).join('')}
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label style="display: block; margin-bottom: 5px; font-weight: 500;">供应商模型名称 <span class="required-mark" style="color: #e74c3c;">*</span></label>
+                    <input type="text" id="new-provider-model-${providerUuid}" class="form-control" placeholder="例如: gpt-4-turbo" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+                    <small style="color: #666; font-size: 12px; margin-top: 4px; display: block;">输入供应商API实际使用的模型名称</small>
+                </div>
+            </div>
+            <div class="form-actions" style="margin-top: 15px; display: flex; gap: 10px;">
+                <button class="btn btn-success btn-sm" onclick="window.saveNewMapping('${providerUuid}')" style="padding: 6px 12px;">
+                    <i class="fas fa-save"></i> 保存
+                </button>
+                <button class="btn btn-secondary btn-sm" onclick="this.closest('.add-mapping-form').remove()" style="padding: 6px 12px;">
+                    <i class="fas fa-times"></i> 取消
+                </button>
+            </div>
+        </div>
+    `;
+    
+    mappingList.insertAdjacentHTML('afterbegin', formHtml);
+}
+
+/**
+ * 保存新的模型映射
+ * @param {string} providerUuid - 提供商UUID
+ */
+async function saveNewMapping(providerUuid) {
+    const modal = document.querySelector('.provider-modal');
+    const providerType = modal.getAttribute('data-provider-type');
+    
+    const clientModel = document.getElementById(`new-client-model-${providerUuid}`).value;
+    const providerModel = document.getElementById(`new-provider-model-${providerUuid}`).value.trim();
+    
+    if (!clientModel || !providerModel) {
+        showToast('请填写完整的映射信息', 'error');
+        return;
+    }
+    
+    try {
+        await window.apiClient.post(`/providers/${encodeURIComponent(providerType)}/${providerUuid}/model-mapping`, {
+            clientModel,
+            providerModel
+        });
+        
+        showToast('模型映射添加成功', 'success');
+        
+        // 刷新提供商配置
+        await refreshProviderConfig(providerType);
+    } catch (error) {
+        console.error('Failed to add model mapping:', error);
+        showToast('添加映射失败: ' + error.message, 'error');
+    }
+}
+
+/**
+ * 编辑模型映射
+ * @param {string} providerUuid - 提供商UUID
+ * @param {string} clientModel - 客户端模型名称
+ * @param {string} currentProviderModel - 当前供应商模型名称
+ */
+async function editMapping(providerUuid, clientModel, currentProviderModel) {
+    const modal = document.querySelector('.provider-modal');
+    const providerType = modal.getAttribute('data-provider-type');
+    
+    const newProviderModel = prompt(`编辑映射\n客户端模型: ${clientModel}\n\n请输入新的供应商模型名称:`, currentProviderModel);
+    
+    if (newProviderModel === null || newProviderModel.trim() === '') {
+        return;
+    }
+    
+    if (newProviderModel === currentProviderModel) {
+        showToast('模型名称未改变', 'info');
+        return;
+    }
+    
+    try {
+        await window.apiClient.post(`/providers/${encodeURIComponent(providerType)}/${providerUuid}/model-mapping`, {
+            clientModel,
+            providerModel: newProviderModel.trim()
+        });
+        
+        showToast('模型映射更新成功', 'success');
+        
+        // 刷新提供商配置
+        await refreshProviderConfig(providerType);
+    } catch (error) {
+        console.error('Failed to update model mapping:', error);
+        showToast('更新映射失败: ' + error.message, 'error');
+    }
+}
+
+/**
+ * 删除模型映射
+ * @param {string} providerUuid - 提供商UUID
+ * @param {string} clientModel - 客户端模型名称
+ */
+async function deleteMapping(providerUuid, clientModel) {
+    const modal = document.querySelector('.provider-modal');
+    const providerType = modal.getAttribute('data-provider-type');
+    
+    if (!confirm(`确定要删除映射 "${clientModel}" 吗？`)) {
+        return;
+    }
+    
+    try {
+        const response = await fetch(`/api/providers/${encodeURIComponent(providerType)}/${providerUuid}/model-mapping`, {
+            method: 'DELETE',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${localStorage.getItem('authToken')}`
+            },
+            body: JSON.stringify({ clientModel })
+        });
+        
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.error?.message || '删除失败');
+        }
+        
+        showToast('模型映射删除成功', 'success');
+        
+        // 刷新提供商配置
+        await refreshProviderConfig(providerType);
+    } catch (error) {
+        console.error('Failed to delete model mapping:', error);
+        showToast('删除映射失败: ' + error.message, 'error');
+    }
+}
+
 // 导出所有函数，并挂载到window对象供HTML调用
 export {
     showProviderManagerModal,
@@ -1069,7 +1327,11 @@ export {
     refreshProviderConfigInModal,
     showAddProviderForm,
     addProvider,
-    toggleProviderStatus
+    toggleProviderStatus,
+    showAddMappingForm,
+    saveNewMapping,
+    editMapping,
+    deleteMapping
 };
 
 // 将函数挂载到window对象
@@ -1084,3 +1346,7 @@ window.refreshProviderConfigInModal = refreshProviderConfigInModal;
 window.showAddProviderForm = showAddProviderForm;
 window.addProvider = addProvider;
 window.toggleProviderStatus = toggleProviderStatus;
+window.showAddMappingForm = showAddMappingForm;
+window.saveNewMapping = saveNewMapping;
+window.editMapping = editMapping;
+window.deleteMapping = deleteMapping;
