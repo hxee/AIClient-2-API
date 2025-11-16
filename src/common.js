@@ -686,8 +686,31 @@ export async function handleModelListRequest(req, res, service, endpointType, CO
                 // Use the first healthy provider for prefix info
                 const healthyProvider = healthyProviders[0];
                 
+                // For openai-custom, filter models based on modelMapping
+                let modelsToShow = providerModels;
+                if (providerType === 'openai-custom') {
+                    // Collect all mapped models from all healthy providers
+                    const allMappedModels = new Set();
+                    healthyProviders.forEach(provider => {
+                        if (provider.modelMapping && typeof provider.modelMapping === 'object') {
+                            Object.keys(provider.modelMapping).forEach(mappedModel => {
+                                allMappedModels.add(mappedModel);
+                            });
+                        }
+                    });
+                    
+                    // Only show models that have at least one mapping
+                    if (allMappedModels.size > 0) {
+                        modelsToShow = providerModels.filter(model => allMappedModels.has(model.id));
+                        console.log(`[ModelList] ${providerType}: Filtered to ${modelsToShow.length} models with mappings (from ${providerModels.length} total)`);
+                    } else {
+                        console.log(`[ModelList] ${providerType}: No modelMapping configured, showing no models`);
+                        modelsToShow = [];
+                    }
+                }
+                
                 // Convert models to the required format
-                let formattedModels = providerModels.map(model => {
+                let formattedModels = modelsToShow.map(model => {
                     if (format === 'openai') {
                         return {
                             id: model.id,

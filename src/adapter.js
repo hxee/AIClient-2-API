@@ -100,19 +100,39 @@ export class GeminiApiServiceAdapter extends ApiServiceAdapter {
 export class OpenAIApiServiceAdapter extends ApiServiceAdapter {
     constructor(config) {
         super();
+        this.config = config;
         this.openAIApiService = new OpenAIApiService(config);
     }
 
+    /**
+     * Apply model mapping if configured
+     * @param {string} model - Original model name from request
+     * @returns {string} - Mapped model name or original if no mapping
+     */
+    _applyModelMapping(model) {
+        // Check if modelMapping is configured for this provider
+        if (this.config.modelMapping && typeof this.config.modelMapping === 'object') {
+            const mappedModel = this.config.modelMapping[model];
+            if (mappedModel) {
+                console.log(`[OpenAI Adapter] Model mapping: ${model} → ${mappedModel}`);
+                return mappedModel;
+            }
+        }
+        return model;
+    }
+
     async generateContent(model, requestBody) {
-        // The adapter now expects the requestBody to be in the native OpenAI format.
-        // The conversion logic is handled upstream in the server.
-        return this.openAIApiService.generateContent(model, requestBody);
+        // Apply model mapping before sending to API
+        const mappedModel = this._applyModelMapping(model);
+        const modifiedRequestBody = { ...requestBody, model: mappedModel };
+        return this.openAIApiService.generateContent(mappedModel, modifiedRequestBody);
     }
 
     async *generateContentStream(model, requestBody) {
-        // The adapter now expects the requestBody to be in the native OpenAI format.
-        const stream = this.openAIApiService.generateContentStream(model, requestBody);
-        // The stream is yielded directly without conversion.
+        // Apply model mapping before sending to API
+        const mappedModel = this._applyModelMapping(model);
+        const modifiedRequestBody = { ...requestBody, model: mappedModel };
+        const stream = this.openAIApiService.generateContentStream(mappedModel, modifiedRequestBody);
         yield* stream;
     }
 
