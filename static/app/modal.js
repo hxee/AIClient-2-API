@@ -429,18 +429,14 @@ function renderModelMappingSection(provider) {
         mappingEntries.forEach(([clientModel, providerModel]) => {
             html += `
                 <div class="model-mapping-item" data-client-model="${escapeHtml(clientModel)}">
-                    <div class="mapping-info">
-                        <div class="mapping-client-model">
-                            <label>客户端模型:</label>
-                            <span>${escapeHtml(clientModel)}</span>
-                        </div>
-                        <div class="mapping-arrow">
-                            <i class="fas fa-arrow-right"></i>
-                        </div>
-                        <div class="mapping-provider-model">
-                            <label>供应商模型:</label>
-                            <span>${escapeHtml(providerModel)}</span>
-                        </div>
+                    <div class="mapping-model">
+                        <div class="mapping-label">客户端模型:</div>
+                        <div class="mapping-value">${escapeHtml(clientModel)}</div>
+                    </div>
+                    <div class="mapping-arrow">→</div>
+                    <div class="mapping-model">
+                        <div class="mapping-label">供应商模型:</div>
+                        <div class="mapping-value">${escapeHtml(providerModel)}</div>
                     </div>
                     <div class="mapping-actions">
                         <button class="btn-edit-mapping" onclick="window.editMapping('${provider.uuid}', '${escapeHtml(clientModel)}', '${escapeHtml(providerModel)}')" title="编辑映射">
@@ -1144,7 +1140,11 @@ async function showAddMappingForm(providerUuid) {
     let availableModels = [];
     try {
         console.log('[showAddMappingForm] Loading models.config...');
-        const modelsConfigResponse = await fetch('/models.config');
+        const modelsConfigResponse = await fetch('/models.config', {
+            headers: {
+                'Authorization': `Bearer ${localStorage.getItem('authToken')}`
+            }
+        });
         
         if (!modelsConfigResponse.ok) {
             throw new Error(`HTTP error! status: ${modelsConfigResponse.status}`);
