@@ -335,9 +335,27 @@ export async function handleUIApiRequests(method, pathParam, req, res, currentCo
                 }
 
                 // multer执行完成后，表单字段已解析到req.body中
-                const provider = req.body.provider || 'common';
+                let provider = req.body.provider || 'common';
                 const providerType = req.body.providerType; // 从前端传递的提供商类型
+                const isEditMode = req.body.isEditMode === 'true'; // 判断是否为编辑模式
                 const tempFilePath = req.file.path;
+                
+                console.log('[UI API] File upload parameters:', {
+                    provider,
+                    providerType,
+                    isEditMode,
+                    fileName: req.file.filename
+                });
+                
+                // 使用providerType映射正确的文件夹名（对应前端 getProviderKey 逻辑）
+                const providerMapping = {
+                    'gemini-cli-oauth': 'gemini',
+                    'claude-kiro-oauth': 'kiro',
+                    'openai-qwen-oauth': 'qwen'
+                };
+                if(providerType && providerMapping[providerType]){
+                    provider = providerMapping[providerType];
+                }
                 
                 // 根据实际的provider移动文件到正确的目录
                 const targetDir = path.join(process.cwd(), 'configs', provider);
@@ -348,11 +366,11 @@ export async function handleUIApiRequests(method, pathParam, req, res, currentCo
                 
                 const relativePath = path.relative(process.cwd(), targetFilePath);
 
-                // 自动添加到 provider.json（如果提供了 providerType）
+                // 智能判断：只在"添加新提供商"模式下自动保存到 provider.json
                 let addedToPool = false;
                 let providerConfig = null;
                 
-                if (providerType) {
+                if (providerType && !isEditMode) {
                     try {
                         // 生成 UUID
                         const uuid = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {

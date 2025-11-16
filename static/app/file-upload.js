@@ -144,11 +144,25 @@ class FileUploadHandler {
                 return;
             }
 
+            // 判断是否为编辑模式（检查输入框是否有 data-config-value 属性或在模态框的编辑状态中）
+            const targetInput = document.getElementById(targetInputId);
+            const isEditMode = targetInput && (
+                targetInput.hasAttribute('data-config-value') ||
+                targetInput.closest('.provider-item-detail') !== null
+            );
+
+            // 根据 providerType 确定正确的 provider 键名
+            let providerKey = this.currentProvider;
+            if (providerType) {
+                providerKey = this.getProviderKey(providerType);
+            }
+
             // 创建 FormData
             const formData = new FormData();
             formData.append('file', file);
-            formData.append('provider', this.currentProvider);
+            formData.append('provider', providerKey);
             formData.append('targetInputId', targetInputId);
+            formData.append('isEditMode', isEditMode.toString());
             
             // 如果有提供商类型，添加到表单数据中
             if (providerType) {
