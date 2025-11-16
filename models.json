@@ -86,42 +86,54 @@
           "name": "Anti-truncation Gemini 2.5 Flash",
           "description": "防截断版 Gemini 2.5 Flash",
           "baseModel": "gemini-2.5-flash",
-          "features": ["anti-truncation"]
+          "features": [
+            "anti-truncation"
+          ]
         },
         {
           "id": "anti-gemini-2.5-flash-lite",
           "name": "Anti-truncation Gemini 2.5 Flash Lite",
           "description": "防截断版 Gemini 2.5 Flash Lite",
           "baseModel": "gemini-2.5-flash-lite",
-          "features": ["anti-truncation"]
+          "features": [
+            "anti-truncation"
+          ]
         },
         {
           "id": "anti-gemini-2.5-pro",
           "name": "Anti-truncation Gemini 2.5 Pro",
           "description": "防截断版 Gemini 2.5 Pro",
           "baseModel": "gemini-2.5-pro",
-          "features": ["anti-truncation"]
+          "features": [
+            "anti-truncation"
+          ]
         },
         {
           "id": "anti-gemini-2.5-pro-preview-06-05",
           "name": "Anti-truncation Gemini 2.5 Pro Preview",
           "description": "防截断版 Gemini 2.5 Pro Preview",
           "baseModel": "gemini-2.5-pro-preview-06-05",
-          "features": ["anti-truncation"]
+          "features": [
+            "anti-truncation"
+          ]
         },
         {
           "id": "anti-gemini-2.5-flash-preview-09-2025",
           "name": "Anti-truncation Gemini 2.5 Flash Preview",
           "description": "防截断版 Gemini 2.5 Flash Preview",
           "baseModel": "gemini-2.5-flash-preview-09-2025",
-          "features": ["anti-truncation"]
+          "features": [
+            "anti-truncation"
+          ]
         },
         {
           "id": "anti-gemini-3-pro-preview-11-2025",
           "name": "Anti-truncation Gemini 3 Pro Preview",
           "description": "防截断版 Gemini 3 Pro Preview",
           "baseModel": "gemini-3-pro-preview-11-2025",
-          "features": ["anti-truncation"]
+          "features": [
+            "anti-truncation"
+          ]
         }
       ]
     },
@@ -152,21 +164,6 @@
           "id": "claude-3-5-sonnet-20241022",
           "name": "Claude 3.5 Sonnet",
           "description": "Claude 3.5 Sonnet 模型"
-        },
-        {
-          "id": "claude-3-5-haiku-20241022",
-          "name": "Claude 3.5 Haiku",
-          "description": "Claude 3.5 Haiku 模型"
-        },
-        {
-          "id": "claude-3-opus-20240229",
-          "name": "Claude 3 Opus",
-          "description": "Claude 3 Opus 模型"
-        },
-        {
-          "id": "claude-3-haiku-20240307",
-          "name": "Claude 3 Haiku",
-          "description": "Claude 3 Haiku 模型"
         }
       ]
     },

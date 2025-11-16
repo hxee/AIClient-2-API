@@ -1236,6 +1236,180 @@ export async function handleUIApiRequests(method, pathParam, req, res, currentCo
         }
     }
 
+    // Models management API endpoints
+    // Get all models from models.json
+    if (method === 'GET' && pathParam === '/api/models') {
+        try {
+            const modelsPath = path.join(process.cwd(), 'models.json');
+            if (!existsSync(modelsPath)) {
+                res.writeHead(404, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: { message: 'models.json not found' } }));
+                return true;
+            }
+            
+            const modelsData = JSON.parse(readFileSync(modelsPath, 'utf8'));
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify(modelsData));
+            return true;
+        } catch (error) {
+            res.writeHead(500, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: { message: error.message } }));
+            return true;
+        }
+    }
+    
+    // Add new model to a provider
+    if (method === 'POST' && pathParam === '/api/models') {
+        try {
+            const body = await parseRequestBody(req);
+            const { providerKey, model } = body;
+            
+            if (!providerKey || !model) {
+                res.writeHead(400, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: { message: 'providerKey and model are required' } }));
+                return true;
+            }
+            
+            const modelsPath = path.join(process.cwd(), 'models.json');
+            let modelsData = JSON.parse(readFileSync(modelsPath, 'utf8'));
+            
+            if (!modelsData.providers[providerKey]) {
+                res.writeHead(404, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: { message: `Provider ${providerKey} not found` } }));
+                return true;
+            }
+            
+            if (!modelsData.providers[providerKey].models) {
+                modelsData.providers[providerKey].models = [];
+            }
+            
+            modelsData.providers[providerKey].models.push(model);
+            writeFileSync(modelsPath, JSON.stringify(modelsData, null, 2), 'utf8');
+            
+            broadcastEvent('config_update', {
+                action: 'add_model',
+                providerKey,
+                model,
+                timestamp: new Date().toISOString()
+            });
+            
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({
+                success: true,
+                message: 'Model added successfully',
+                model
+            }));
+            return true;
+        } catch (error) {
+            res.writeHead(500, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: { message: error.message } }));
+            return true;
+        }
+    }
+    
+    // Update a model
+    const updateModelMatch = pathParam.match(/^\/api\/models\/([^\/]+)\/([^\/]+)$/);
+    if (method === 'PUT' && updateModelMatch) {
+        const providerKey = decodeURIComponent(updateModelMatch[1]);
+        const modelId = decodeURIComponent(updateModelMatch[2]);
+        
+        try {
+            const body = await parseRequestBody(req);
+            const { model } = body;
+            
+            if (!model) {
+                res.writeHead(400, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: { message: 'model is required' } }));
+                return true;
+            }
+            
+            const modelsPath = path.join(process.cwd(), 'models.json');
+            let modelsData = JSON.parse(readFileSync(modelsPath, 'utf8'));
+            
+            if (!modelsData.providers[providerKey]) {
+                res.writeHead(404, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: { message: `Provider ${providerKey} not found` } }));
+                return true;
+            }
+            
+            const modelIndex = modelsData.providers[providerKey].models.findIndex(m => m.id === modelId);
+            if (modelIndex === -1) {
+                res.writeHead(404, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: { message: 'Model not found' } }));
+                return true;
+            }
+            
+            modelsData.providers[providerKey].models[modelIndex] = model;
+            writeFileSync(modelsPath, JSON.stringify(modelsData, null, 2), 'utf8');
+            
+            broadcastEvent('config_update', {
+                action: 'update_model',
+                providerKey,
+                model,
+                timestamp: new Date().toISOString()
+            });
+            
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({
+                success: true,
+                message: 'Model updated successfully',
+                model
+            }));
+            return true;
+        } catch (error) {
+            res.writeHead(500, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: { message: error.message } }));
+            return true;
+        }
+    }
+    
+    // Delete a model
+    if (method === 'DELETE' && updateModelMatch) {
+        const providerKey = decodeURIComponent(updateModelMatch[1]);
+        const modelId = decodeURIComponent(updateModelMatch[2]);
+        
+        try {
+            const modelsPath = path.join(process.cwd(), 'models.json');
+            let modelsData = JSON.parse(readFileSync(modelsPath, 'utf8'));
+            
+            if (!modelsData.providers[providerKey]) {
+                res.writeHead(404, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: { message: `Provider ${providerKey} not found` } }));
+                return true;
+            }
+            
+            const modelIndex = modelsData.providers[providerKey].models.findIndex(m => m.id === modelId);
+            if (modelIndex === -1) {
+                res.writeHead(404, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: { message: 'Model not found' } }));
+                return true;
+            }
+            
+            const deletedModel = modelsData.providers[providerKey].models[modelIndex];
+            modelsData.providers[providerKey].models.splice(modelIndex, 1);
+            writeFileSync(modelsPath, JSON.stringify(modelsData, null, 2), 'utf8');
+            
+            broadcastEvent('config_update', {
+                action: 'delete_model',
+                providerKey,
+                modelId,
+                timestamp: new Date().toISOString()
+            });
+            
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({
+                success: true,
+                message: 'Model deleted successfully',
+                deletedModel
+            }));
+            return true;
+        } catch (error) {
+            res.writeHead(500, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: { message: error.message } }));
+            return true;
+        }
+    }
+
     // Server-Sent Events for real-time updates
     if (method === 'GET' && pathParam === '/api/events') {
         res.writeHead(200, {

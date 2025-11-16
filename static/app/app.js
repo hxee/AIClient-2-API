@@ -63,6 +63,8 @@ import {
     reloadConfig
 } from './upload-config-manager.js';
 
+import './models-manager.js';
+
 /**
  * 加载初始数据
  */
