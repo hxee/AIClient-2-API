@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { getProviderModels } from '../model-config-manager.js';
 
 // Assumed OpenAI API specification service for interacting with third-party models
 export class OpenAIApiService {
@@ -143,13 +144,25 @@ export class OpenAIApiService {
 
     async listModels() {
         try {
-            const response = await this.axiosInstance.get('/models');
-            return response.data;
+            // Load models from models.config instead of calling the provider endpoint
+            const providerModels = await getProviderModels('openai-custom');
+            const models = [];
+            for (const [key, value] of Object.entries(providerModels)) {
+                models.push({
+                    id: value,
+                    object: 'model',
+                    created: Math.floor(Date.now() / 1000),
+                    owned_by: 'openai-custom',
+                    permission: [],
+                    root: value,
+                    parent: null
+                });
+            }
+            return { data: models, object: 'list' };
         } catch (error) {
-            const status = error.response?.status;
-            const data = error.response?.data;
-            console.error(`Error listing OpenAI models (Status: ${status}):`, data || error.message);
-            throw error;
+            console.warn(`Error listing OpenAI models from config: ${error.message}`);
+            // Fallback to empty list if config fails
+            return { data: [], object: 'list' };
         }
     }
 }
