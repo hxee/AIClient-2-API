@@ -1273,18 +1273,102 @@ async function editMapping(providerUuid, clientModel, currentProviderModel) {
     const modal = document.querySelector('.provider-modal');
     const providerType = modal.getAttribute('data-provider-type');
     
-    const newProviderModel = prompt(`编辑映射\n客户端模型: ${clientModel}\n\n请输入新的供应商模型名称:`, currentProviderModel);
-    
-    if (newProviderModel === null || newProviderModel.trim() === '') {
-        return;
+    // 加载 models.config 中的模型列表
+    let availableModels = [];
+    try {
+        const modelsConfigResponse = await fetch('/models.config', {
+            method: 'GET',
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        });
+        
+        if (modelsConfigResponse.ok) {
+            const modelsConfig = await modelsConfigResponse.json();
+            if (modelsConfig.providers && modelsConfig.providers['openai-custom']) {
+                availableModels = modelsConfig.providers['openai-custom'].models || [];
+            }
+        }
+    } catch (error) {
+        console.error('[editMapping] Failed to load models config:', error);
     }
     
-    if (newProviderModel === currentProviderModel) {
-        showToast('模型名称未改变', 'info');
+    // 创建编辑表单
+    const mappingList = document.getElementById(`mapping-list-${providerUuid}`);
+    
+    // 移除已存在的编辑表单
+    const existingEditForm = mappingList.querySelector('.edit-mapping-form');
+    if (existingEditForm) {
+        existingEditForm.remove();
+    }
+    
+    // 查找当前映射项
+    const mappingItem = mappingList.querySelector(`[data-client-model="${escapeHtml(clientModel)}"]`);
+    if (!mappingItem) return;
+    
+    const formHtml = `
+        <div class="edit-mapping-form" style="background: #fff3cd; padding: 15px; border-radius: 8px; margin-bottom: 15px; border: 2px solid #ffc107;">
+            <h5 style="margin: 0 0 15px 0;"><i class="fas fa-edit"></i> 编辑映射</h5>
+            <div class="form-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                <div class="form-group">
+                    <label style="display: block; margin-bottom: 5px; font-weight: 500;">客户端模型 <span class="required-mark" style="color: #e74c3c;">*</span></label>
+                    <select id="edit-client-model-${providerUuid}" class="form-control" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+                        <option value="${escapeHtml(clientModel)}" selected>${escapeHtml(clientModel)}</option>
+                        ${availableModels.filter(m => m.id !== clientModel).map(m => `<option value="${escapeHtml(m.id)}">${escapeHtml(m.name || m.id)}</option>`).join('')}
+                    </select>
+                    <small style="color: #666; font-size: 12px; margin-top: 4px; display: block;">选择要映射的客户端模型</small>
+                </div>
+                <div class="form-group">
+                    <label style="display: block; margin-bottom: 5px; font-weight: 500;">供应商模型名称 <span class="required-mark" style="color: #e74c3c;">*</span></label>
+                    <input type="text" id="edit-provider-model-${providerUuid}" class="form-control" value="${escapeHtml(currentProviderModel)}" placeholder="例如: gpt-4-turbo" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+                    <small style="color: #666; font-size: 12px; margin-top: 4px; display: block;">输入供应商API实际使用的模型名称</small>
+                </div>
+            </div>
+            <div class="form-actions" style="margin-top: 15px; display: flex; gap: 10px;">
+                <button class="btn btn-primary btn-sm" onclick="window.saveEditedMapping('${providerUuid}', '${escapeHtml(clientModel)}')" style="padding: 6px 12px;">
+                    <i class="fas fa-save"></i> 保存
+                </button>
+                <button class="btn btn-secondary btn-sm" onclick="this.closest('.edit-mapping-form').remove()" style="padding: 6px 12px;">
+                    <i class="fas fa-times"></i> 取消
+                </button>
+            </div>
+        </div>
+    `;
+    
+    mappingItem.insertAdjacentHTML('afterend', formHtml);
+}
+
+/**
+ * 保存编辑后的模型映射
+ * @param {string} providerUuid - 提供商UUID
+ * @param {string} originalClientModel - 原始客户端模型名称
+ */
+async function saveEditedMapping(providerUuid, originalClientModel) {
+    const modal = document.querySelector('.provider-modal');
+    const providerType = modal.getAttribute('data-provider-type');
+    
+    const newClientModel = document.getElementById(`edit-client-model-${providerUuid}`).value;
+    const newProviderModel = document.getElementById(`edit-provider-model-${providerUuid}`).value.trim();
+    
+    if (!newClientModel || !newProviderModel) {
+        showToast('请填写完整的映射信息', 'error');
         return;
     }
     
     try {
+        // 如果客户端模型改变了，需要先删除旧的映射
+        if (newClientModel !== originalClientModel) {
+            await fetch(`/api/providers/${encodeURIComponent(providerType)}/${providerUuid}/model-mapping`, {
+                method: 'DELETE',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${localStorage.getItem('authToken')}`
+                },
+                body: JSON.stringify({ clientModel: originalClientModel })
+            });
+        }
+        
+        // 添加/更新新的映射
         const response = await fetch(`/api/providers/${encodeURIComponent(providerType)}/${providerUuid}/model-mapping`, {
             method: 'POST',
             headers: {
@@ -1292,8 +1376,8 @@ async function editMapping(providerUuid, clientModel, currentProviderModel) {
                 'Authorization': `Bearer ${localStorage.getItem('authToken')}`
             },
             body: JSON.stringify({
-                clientModel,
-                providerModel: newProviderModel.trim()
+                clientModel: newClientModel,
+                providerModel: newProviderModel
             })
         });
         
@@ -1367,6 +1451,7 @@ export {
     showAddMappingForm,
     saveNewMapping,
     editMapping,
+    saveEditedMapping,
     deleteMapping
 };
 
@@ -1385,4 +1470,5 @@ window.toggleProviderStatus = toggleProviderStatus;
 window.showAddMappingForm = showAddMappingForm;
 window.saveNewMapping = saveNewMapping;
 window.editMapping = editMapping;
+window.saveEditedMapping = saveEditedMapping;
 window.deleteMapping = deleteMapping;
