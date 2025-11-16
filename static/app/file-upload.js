@@ -150,6 +150,9 @@ class FileUploadHandler {
                 targetInput.hasAttribute('data-config-value') ||
                 targetInput.closest('.provider-item-detail') !== null
             );
+            
+            // 获取旧文件路径（用于编辑模式下替换文件）
+            const oldFilePath = isEditMode && targetInput ? targetInput.value : null;
 
             // 根据 providerType 确定正确的 provider 键名
             let providerKey = this.currentProvider;
@@ -163,6 +166,11 @@ class FileUploadHandler {
             formData.append('provider', providerKey);
             formData.append('targetInputId', targetInputId);
             formData.append('isEditMode', isEditMode.toString());
+            
+            // 如果是编辑模式且有旧文件路径，添加到表单数据中
+            if (isEditMode && oldFilePath) {
+                formData.append('oldFilePath', oldFilePath);
+            }
             
             // 如果有提供商类型，添加到表单数据中
             if (providerType) {

@@ -338,12 +338,14 @@ export async function handleUIApiRequests(method, pathParam, req, res, currentCo
                 let provider = req.body.provider || 'common';
                 const providerType = req.body.providerType; // 从前端传递的提供商类型
                 const isEditMode = req.body.isEditMode === 'true'; // 判断是否为编辑模式
+                const oldFilePath = req.body.oldFilePath; // 编辑模式下的旧文件路径
                 const tempFilePath = req.file.path;
                 
                 console.log('[UI API] File upload parameters:', {
                     provider,
                     providerType,
                     isEditMode,
+                    oldFilePath,
                     fileName: req.file.filename
                 });
                 
@@ -361,10 +363,38 @@ export async function handleUIApiRequests(method, pathParam, req, res, currentCo
                 const targetDir = path.join(process.cwd(), 'configs', provider);
                 await fs.mkdir(targetDir, { recursive: true });
                 
-                const targetFilePath = path.join(targetDir, req.file.filename);
-                await fs.rename(tempFilePath, targetFilePath);
+                let targetFilePath;
+                let relativePath;
                 
-                const relativePath = path.relative(process.cwd(), targetFilePath);
+                // 编辑模式：替换旧文件
+                if (isEditMode && oldFilePath) {
+                    const oldFullPath = path.join(process.cwd(), oldFilePath);
+                    
+                    // 使用旧文件的名称
+                    const oldFileName = path.basename(oldFilePath);
+                    targetFilePath = path.join(targetDir, oldFileName);
+                    
+                    // 删除旧文件（如果存在）
+                    if (existsSync(oldFullPath)) {
+                        try {
+                            await fs.unlink(oldFullPath);
+                            console.log(`[UI API] Deleted old file: ${oldFullPath}`);
+                        } catch (unlinkError) {
+                            console.warn(`[UI API] Failed to delete old file: ${unlinkError.message}`);
+                        }
+                    }
+                    
+                    // 移动新文件到旧文件的位置
+                    await fs.rename(tempFilePath, targetFilePath);
+                    relativePath = oldFilePath; // 保持相同的相对路径
+                    
+                    console.log(`[UI API] Replaced file in edit mode: ${relativePath}`);
+                } else {
+                    // 新增模式：使用时间戳命名
+                    targetFilePath = path.join(targetDir, req.file.filename);
+                    await fs.rename(tempFilePath, targetFilePath);
+                    relativePath = path.relative(process.cwd(), targetFilePath);
+                }
 
                 // 智能判断：只在"添加新提供商"模式下自动保存到 provider.json
                 let addedToPool = false;
@@ -1343,21 +1373,102 @@ export async function handleUIApiRequests(method, pathParam, req, res, currentCo
                 return true;
             }
             
+            // 删除文件前，先清理 provider.json 中引用该文件的提供商记录
+            const providerFilePath = currentConfig.PROVIDER_FILE_PATH || 'provider.json';
+            let providerPools = {};
+            let removedProviders = [];
             
+            if (existsSync(providerFilePath)) {
+                try {
+                    const fileContent = readFileSync(providerFilePath, 'utf8');
+                    providerPools = JSON.parse(fileContent);
+                    
+                    // 遍历所有提供商类型，查找并删除引用该文件的提供商
+                    for (const [providerType, providers] of Object.entries(providerPools)) {
+                        if (!Array.isArray(providers)) continue;
+                        
+                        const originalLength = providers.length;
+                        providerPools[providerType] = providers.filter(provider => {
+                            // 检查所有可能的凭据字段
+                            const credentialFields = [
+                                'GEMINI_OAUTH_CREDS_FILE_PATH',
+                                'KIRO_OAUTH_CREDS_FILE_PATH',
+                                'QWEN_OAUTH_CREDS_FILE_PATH'
+                            ];
+                            
+                            for (const field of credentialFields) {
+                                if (provider[field]) {
+                                    // 路径比较（考虑不同格式）
+                                    if (pathsEqual(relativePath, provider[field]) ||
+                                        pathsEqual(relativePath, provider[field].replace(/\\/g, '/'))) {
+                                        removedProviders.push({
+                                            providerType,
+                                            uuid: provider.uuid,
+                                            field
+                                        });
+                                        return false; // 过滤掉该提供商
+                                    }
+                                }
+                            }
+                            return true; // 保留该提供商
+                        });
+                        
+                        // 如果该类型下没有提供商了，删除整个类型
+                        if (providerPools[providerType].length === 0) {
+                            delete providerPools[providerType];
+                        }
+                    }
+                    
+                    // 如果有提供商被删除，更新 provider.json
+                    if (removedProviders.length > 0) {
+                        writeFileSync(providerFilePath, JSON.stringify(providerPools, null, 2), 'utf8');
+                        console.log(`[UI API] Removed ${removedProviders.length} provider(s) referencing deleted file: ${relativePath}`);
+                        
+                        // 更新 provider pool manager
+                        if (providerPoolManager) {
+                            providerPoolManager.providerPools = providerPools;
+                            providerPoolManager.initializeProviderStatus();
+                        }
+                        
+                        // 更新 CONFIG 缓存
+                        CONFIG.providerPools = providerPools;
+                        
+                        // 广播提供商删除事件
+                        for (const removed of removedProviders) {
+                            broadcastEvent('provider_update', {
+                                action: 'delete',
+                                providerType: removed.providerType,
+                                providerUuid: removed.uuid,
+                                reason: 'credential_file_deleted',
+                                timestamp: new Date().toISOString()
+                            });
+                        }
+                    }
+                } catch (poolError) {
+                    console.warn('[UI API] Failed to clean provider pools:', poolError.message);
+                    // 继续删除文件，即使清理提供商池失败
+                }
+            }
+            
+            // 删除配置文件
             await fs.unlink(fullPath);
             
             // 广播更新事件
             broadcastEvent('config_update', {
                 action: 'delete',
                 filePath: relativePath,
+                removedProviders: removedProviders.length,
                 timestamp: new Date().toISOString()
             });
             
             res.writeHead(200, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify({
                 success: true,
-                message: '文件删除成功',
-                filePath: relativePath
+                message: removedProviders.length > 0
+                    ? `文件删除成功，同时移除了 ${removedProviders.length} 个关联的提供商配置`
+                    : '文件删除成功',
+                filePath: relativePath,
+                removedProviders: removedProviders
             }));
             return true;
         } catch (error) {
