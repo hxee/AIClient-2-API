@@ -8,14 +8,12 @@
         {
           "id": "glm-4.6",
           "name": "glm-4.6",
-          "description": "glm-4.6",
-          "type": "chat"
+          "description": "glm-4.6"
         },
         {
           "id": "gemini-2.5-flash",
           "name": "gemini-2.5-flash",
-          "description": "gemini-2.5-flash",
-          "type": "chat"
+          "description": "gemini-2.5-flash"
         }
       ]
     },
@@ -25,14 +23,12 @@
         {
           "id": "openai-responses-A",
           "name": "OpenAI Responses Model A",
-          "description": "自定义 OpenAI Responses 模型 A",
-          "type": "responses"
+          "description": "自定义 OpenAI Responses 模型 A"
         },
         {
           "id": "openai-responses-B",
           "name": "OpenAI Responses Model B",
-          "description": "自定义 OpenAI Responses 模型 B",
-          "type": "responses"
+          "description": "自定义 OpenAI Responses 模型 B"
         }
       ]
     },
@@ -42,98 +38,62 @@
         {
           "id": "gemini-2.5-flash",
           "name": "Gemini 2.5 Flash",
-          "description": "快速高效的 Gemini 模型",
-          "inputTokenLimit": 32768,
-          "outputTokenLimit": 8192
+          "description": "快速高效的 Gemini 模型"
         },
         {
           "id": "gemini-2.5-flash-lite",
           "name": "Gemini 2.5 Flash Lite",
-          "description": "轻量级 Gemini Flash 模型",
-          "inputTokenLimit": 32768,
-          "outputTokenLimit": 8192
+          "description": "轻量级 Gemini Flash 模型"
         },
         {
           "id": "gemini-2.5-pro",
           "name": "Gemini 2.5 Pro",
-          "description": "高性能 Gemini Pro 模型",
-          "inputTokenLimit": 32768,
-          "outputTokenLimit": 8192
+          "description": "高性能 Gemini Pro 模型"
         },
         {
           "id": "gemini-2.5-pro-preview-06-05",
           "name": "Gemini 2.5 Pro Preview",
-          "description": "Gemini 2.5 Pro 预览版本",
-          "inputTokenLimit": 32768,
-          "outputTokenLimit": 8192
+          "description": "Gemini 2.5 Pro 预览版本"
         },
         {
           "id": "gemini-2.5-flash-preview-09-2025",
           "name": "Gemini 2.5 Flash Preview",
-          "description": "Gemini 2.5 Flash 预览版本",
-          "inputTokenLimit": 32768,
-          "outputTokenLimit": 8192
+          "description": "Gemini 2.5 Flash 预览版本"
         },
         {
           "id": "gemini-3-pro-preview-11-2025",
           "name": "Gemini 3 Pro Preview",
-          "description": "Gemini 3.0 Pro 预览版本",
-          "inputTokenLimit": 32768,
-          "outputTokenLimit": 8192
+          "description": "Gemini 3.0 Pro 预览版本"
         },
         {
           "id": "anti-gemini-2.5-flash",
           "name": "Anti-truncation Gemini 2.5 Flash",
-          "description": "防截断版 Gemini 2.5 Flash",
-          "baseModel": "gemini-2.5-flash",
-          "features": [
-            "anti-truncation"
-          ]
+          "description": "防截断版 Gemini 2.5 Flash"
         },
         {
           "id": "anti-gemini-2.5-flash-lite",
           "name": "Anti-truncation Gemini 2.5 Flash Lite",
-          "description": "防截断版 Gemini 2.5 Flash Lite",
-          "baseModel": "gemini-2.5-flash-lite",
-          "features": [
-            "anti-truncation"
-          ]
+          "description": "防截断版 Gemini 2.5 Flash Lite"
         },
         {
           "id": "anti-gemini-2.5-pro",
           "name": "Anti-truncation Gemini 2.5 Pro",
-          "description": "防截断版 Gemini 2.5 Pro",
-          "baseModel": "gemini-2.5-pro",
-          "features": [
-            "anti-truncation"
-          ]
+          "description": "防截断版 Gemini 2.5 Pro"
         },
         {
           "id": "anti-gemini-2.5-pro-preview-06-05",
           "name": "Anti-truncation Gemini 2.5 Pro Preview",
-          "description": "防截断版 Gemini 2.5 Pro Preview",
-          "baseModel": "gemini-2.5-pro-preview-06-05",
-          "features": [
-            "anti-truncation"
-          ]
+          "description": "防截断版 Gemini 2.5 Pro Preview"
         },
         {
           "id": "anti-gemini-2.5-flash-preview-09-2025",
           "name": "Anti-truncation Gemini 2.5 Flash Preview",
-          "description": "防截断版 Gemini 2.5 Flash Preview",
-          "baseModel": "gemini-2.5-flash-preview-09-2025",
-          "features": [
-            "anti-truncation"
-          ]
+          "description": "防截断版 Gemini 2.5 Flash Preview"
         },
         {
           "id": "anti-gemini-3-pro-preview-11-2025",
           "name": "Anti-truncation Gemini 3 Pro Preview",
-          "description": "防截断版 Gemini 3 Pro Preview",
-          "baseModel": "gemini-3-pro-preview-11-2025",
-          "features": [
-            "anti-truncation"
-          ]
+          "description": "防截断版 Gemini 3 Pro Preview"
         }
       ]
     },

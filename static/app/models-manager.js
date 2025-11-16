@@ -111,7 +111,7 @@ class ModelsManager {
     }
 
     /**
-     * 渲染模型列表
+     * 渲染模型列表 - 垂直布局
      */
     renderModelsList(providerKey, models) {
         if (!models || models.length === 0) {
@@ -121,12 +121,19 @@ class ModelsManager {
         let html = '<div class="models-vertical-list">';
         
         for (const model of models) {
+            // 显示额外属性（如 kiroMapping）
+            let extraInfo = '';
+            if (model.kiroMapping) {
+                extraInfo = `<div class="model-extra-info"><span class="extra-label">Kiro映射:</span> <span class="extra-value">${model.kiroMapping}</span></div>`;
+            }
+            
             html += `
-                <div class="model-item-vertical" data-model-id="${model.id}">
+                <div class="model-item-vertical" data-model-id="${model.id}" data-provider="${providerKey}">
                     <div class="model-info">
                         <h4>${model.name || model.id}</h4>
-                        <p class="model-id">ID: ${model.id}</p>
-                        ${model.description ? `<p class="model-description">${model.description}</p>` : ''}
+                        <div class="model-id">ID: ${model.id}</div>
+                        ${model.description ? `<div class="model-description">${model.description}</div>` : ''}
+                        ${extraInfo}
                     </div>
                     <div class="model-actions">
                         <button class="btn btn-sm btn-outline" onclick="window.modelsManager.editModel('${providerKey}', '${model.id}')">
@@ -173,6 +180,9 @@ class ModelsManager {
         // 先关闭所有现有的模态框
         this.closeAllModals();
         
+        // 检查是否是 claude-kiro，如果是则显示 kiroMapping 字段
+        const isKiro = providerKey === 'claude-kiro';
+        
         const modal = document.createElement('div');
         modal.className = 'modal-overlay';
         modal.style.display = 'flex';
@@ -195,13 +205,12 @@ class ModelsManager {
                         <label for="modelDescription">描述</label>
                         <textarea id="modelDescription" class="form-control" rows="2" placeholder="模型描述"></textarea>
                     </div>
+                    ${isKiro ? `
                     <div class="form-group">
-                        <label for="modelType">类型</label>
-                        <select id="modelType" class="form-control">
-                            <option value="chat">Chat</option>
-                            <option value="responses">Responses</option>
-                        </select>
+                        <label for="kiroMapping">Kiro 映射</label>
+                        <input type="text" id="kiroMapping" class="form-control" placeholder="例如: CLAUDE_SONNET_4_5_20250929_V1_0">
                     </div>
+                    ` : ''}
                 </div>
                 <div class="modal-footer">
                     <button class="btn btn-secondary modal-close">取消</button>
@@ -227,7 +236,6 @@ class ModelsManager {
             const modelId = document.getElementById('modelId').value.trim();
             const modelName = document.getElementById('modelName').value.trim();
             const modelDescription = document.getElementById('modelDescription').value.trim();
-            const modelType = document.getElementById('modelType').value;
             
             if (!modelId) {
                 showToast('请输入模型 ID', 'error');
@@ -236,12 +244,18 @@ class ModelsManager {
             
             const model = {
                 id: modelId,
-                name: modelName || modelId,
-                type: modelType
+                name: modelName || modelId
             };
             
             if (modelDescription) {
                 model.description = modelDescription;
+            }
+            
+            if (isKiro) {
+                const kiroMapping = document.getElementById('kiroMapping').value.trim();
+                if (kiroMapping) {
+                    model.kiroMapping = kiroMapping;
+                }
             }
             
             await this.addModel(providerKey, model);
@@ -280,6 +294,9 @@ class ModelsManager {
         // 先关闭所有现有的模态框
         this.closeAllModals();
         
+        // 检查是否是 claude-kiro
+        const isKiro = providerKey === 'claude-kiro';
+        
         const modal = document.createElement('div');
         modal.className = 'modal-overlay';
         modal.style.display = 'flex';
@@ -302,13 +319,12 @@ class ModelsManager {
                         <label for="modelDescription">描述</label>
                         <textarea id="modelDescription" class="form-control" rows="2" placeholder="模型描述">${model.description || ''}</textarea>
                     </div>
+                    ${isKiro ? `
                     <div class="form-group">
-                        <label for="modelType">类型</label>
-                        <select id="modelType" class="form-control">
-                            <option value="chat" ${model.type === 'chat' ? 'selected' : ''}>Chat</option>
-                            <option value="responses" ${model.type === 'responses' ? 'selected' : ''}>Responses</option>
-                        </select>
+                        <label for="kiroMapping">Kiro 映射</label>
+                        <input type="text" id="kiroMapping" class="form-control" value="${model.kiroMapping || ''}" placeholder="例如: CLAUDE_SONNET_4_5_20250929_V1_0">
                     </div>
+                    ` : ''}
                 </div>
                 <div class="modal-footer">
                     <button class="btn btn-secondary modal-close">取消</button>
@@ -334,7 +350,6 @@ class ModelsManager {
             const newModelId = document.getElementById('modelId').value.trim();
             const modelName = document.getElementById('modelName').value.trim();
             const modelDescription = document.getElementById('modelDescription').value.trim();
-            const modelType = document.getElementById('modelType').value;
             
             if (!newModelId) {
                 showToast('请输入模型 ID', 'error');
@@ -343,12 +358,18 @@ class ModelsManager {
             
             const updatedModel = {
                 id: newModelId,
-                name: modelName || newModelId,
-                type: modelType
+                name: modelName || newModelId
             };
             
             if (modelDescription) {
                 updatedModel.description = modelDescription;
+            }
+            
+            if (isKiro) {
+                const kiroMapping = document.getElementById('kiroMapping').value.trim();
+                if (kiroMapping) {
+                    updatedModel.kiroMapping = kiroMapping;
+                }
             }
             
             await this.updateModel(providerKey, modelId, updatedModel);
