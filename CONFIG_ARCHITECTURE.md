@@ -377,7 +377,7 @@ this.roundRobinIndex[providerType] = (providerIndex + 1) % availableProviders.le
 
 **文档版本**: 1.0  
 **最后更新**: 2025-11-15  
-**维护者**: AnyAI-2-Open-API Team
+**维护者**: AIClient-2-API Team
 
 ## 新版本改进 (v2.0)
 
@@ -490,4 +490,4 @@ if (result.addedToPool) {
 **文档版本**: 2.0  
 **最后更新**: 2025-11-15  
 **新增功能**: 自动凭据添加、配置完全分离  
-**维护者**: AnyAI-2-Open-API Team
+**维护者**: AIClient-2-API Team
