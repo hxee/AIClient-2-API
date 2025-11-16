@@ -4,7 +4,6 @@ import { initApiService } from './service-manager.js';
 import { initializeUIManagement } from './ui-manager.js';
 import { initializeAPIManagement } from './api-manager.js';
 import { createRequestHandler } from './request-handler.js';
-import warpConfig from './warp/warp-config.js';
 
 /**
  * @license
@@ -122,9 +121,6 @@ import { getProviderPoolManager } from './service-manager.js';
 async function startServer() {
     // Initialize configuration
     await initializeConfig();
-    
-    // Update warp config from global CONFIG
-    warpConfig.updateFromConfig(CONFIG);
     
     // Initialize API services
     const services = await initApiService(CONFIG);

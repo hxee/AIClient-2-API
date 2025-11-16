@@ -4,11 +4,10 @@
  */
 
 import { MODEL_PROVIDER, removeModelPrefix, getProviderFromPrefix } from './common.js';
-import { getAllUniqueModels } from './warp/warp-models.js';
 
 /**
  * Get provider type for a given model name
- * @param {string} modelName - The model name to look up (may include prefix like "[Warp] gpt-5")
+ * @param {string} modelName - The model name to look up (may include prefix like "[Gemini] gemini-2.0")
  * @param {string} defaultProvider - The default provider if no match is found
  * @returns {string} The provider type
  */
@@ -27,20 +26,13 @@ export function getProviderForModel(modelName, defaultProvider) {
     const cleanModelName = removeModelPrefix(modelName);
     const lowerModel = cleanModelName.toLowerCase();
 
-    // Warp models
-    const warpModels = getAllUniqueModels();
-    const isWarpModel = warpModels.some(m => m.id.toLowerCase() === lowerModel);
-    if (isWarpModel) {
-        return MODEL_PROVIDER.WARP_API;
-    }
-
     // Gemini models
     if (lowerModel.includes('gemini')) {
         return MODEL_PROVIDER.GEMINI_CLI;
     }
 
-    // Claude models (excluding Warp's claude models)
-    if (lowerModel.includes('claude') && !isWarpModel) {
+    // Claude models
+    if (lowerModel.includes('claude')) {
         // Check if it's a Kiro model
         if (lowerModel.includes('amazonq')) {
             return MODEL_PROVIDER.KIRO_API;
@@ -53,8 +45,8 @@ export function getProviderForModel(modelName, defaultProvider) {
         return MODEL_PROVIDER.QWEN_API;
     }
 
-    // OpenAI models (excluding Warp's gpt models)
-    if ((lowerModel.includes('gpt') || lowerModel.includes('o1') || lowerModel.includes('o3')) && !isWarpModel) {
+    // OpenAI models
+    if (lowerModel.includes('gpt') || lowerModel.includes('o1') || lowerModel.includes('o3')) {
         return MODEL_PROVIDER.OPENAI_CUSTOM;
     }
 

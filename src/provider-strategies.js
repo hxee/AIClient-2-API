@@ -3,8 +3,6 @@ import { GeminiStrategy } from './gemini/gemini-strategy.js';
 import { OpenAIStrategy } from './openai/openai-strategy.js';
 import { ClaudeStrategy } from './claude/claude-strategy.js';
 import { ResponsesAPIStrategy } from './openai/openai-responses-strategy.js';
-import { WarpStrategy } from './warp/warp-strategy.js';
-
 /**
  * Strategy factory that returns the appropriate strategy instance based on the provider protocol.
  */
@@ -19,8 +17,6 @@ class ProviderStrategyFactory {
                 return new ResponsesAPIStrategy();
             case MODEL_PROTOCOL_PREFIX.CLAUDE:
                 return new ClaudeStrategy();
-            case 'warp':
-                return new WarpStrategy();
             default:
                 throw new Error(`Unsupported provider protocol: ${providerProtocol}`);
         }

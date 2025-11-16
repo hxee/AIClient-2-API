@@ -1,6 +1,6 @@
 // 模态框管理模块
 
-import { showToast, getFieldLabel, getProviderTypeFields } from './utils.js';
+import { showToast, getFieldLabel, getProviderTypeFields, escapeHtml, getProviderDisplayName } from './utils.js';
 import { handleProviderPasswordToggle } from './event-handlers.js';
 
 /**
@@ -9,6 +9,7 @@ import { handleProviderPasswordToggle } from './event-handlers.js';
  */
 function showProviderManagerModal(data) {
     const { providerType, providers, totalCount, healthyCount } = data;
+    const providerDisplayName = getProviderDisplayName(providerType);
     
     // 移除已存在的模态框
     const existingModal = document.querySelector('.provider-modal');
@@ -27,7 +28,7 @@ function showProviderManagerModal(data) {
     modal.innerHTML = `
         <div class="provider-modal-content">
             <div class="provider-modal-header">
-                <h3><i class="fas fa-cogs"></i> 管理 ${providerType} 提供商配置</h3>
+                <h3><i class="fas fa-cogs"></i> 管理 ${providerDisplayName} 提供商配置</h3>
                 <button class="modal-close" onclick="window.closeProviderModal(this)">
                     <i class="fas fa-times"></i>
                 </button>
@@ -44,7 +45,7 @@ function showProviderManagerModal(data) {
                     </div>
                     <div class="provider-summary-actions">
                         <button class="btn btn-success" onclick="window.showAddProviderForm('${providerType}')">
-                            <i class="fas fa-plus"></i> 添加新提供商
+                            <i class="fas fa-plus"></i> 添加 ${providerDisplayName} 账号
                         </button>
                     </div>
                 </div>
@@ -167,13 +168,16 @@ function renderProviderList(providers) {
         const toggleButtonText = isDisabled ? '启用' : '禁用';
         const toggleButtonIcon = isDisabled ? 'fas fa-play' : 'fas fa-ban';
         const toggleButtonClass = isDisabled ? 'btn-success' : 'btn-warning';
+        const displayName = provider.vendorName ? `${provider.vendorName} (${provider.uuid})` : provider.uuid;
+        const vendorMeta = provider.vendorName ? `<span class="vendor-label"><i class="fas fa-store"></i> 供应商: ${escapeHtml(provider.vendorName)}</span> | ` : '';
         
         return `
             <div class="provider-item-detail ${healthClass} ${disabledClass}" data-uuid="${provider.uuid}">
                 <div class="provider-item-header" onclick="window.toggleProviderDetails('${provider.uuid}')">
                     <div class="provider-info">
-                        <div class="provider-name">${provider.uuid}</div>
+                        <div class="provider-name">${escapeHtml(displayName)}</div>
                         <div class="provider-meta">
+                            ${vendorMeta}
                             <span class="health-status">
                                 <i class="${healthIcon}"></i>
                                 健康状态: ${healthText}
@@ -271,7 +275,7 @@ function renderProviderConfig(provider) {
         const field1Value = provider[field1Key];
         const field1IsPassword = field1Key.toLowerCase().includes('key') || field1Key.toLowerCase().includes('password');
         const field1IsOAuthFilePath = field1Key.includes('OAUTH_CREDS_FILE_PATH');
-        const field1DisplayValue = field1IsPassword && field1Value ? '••••••••' : (field1Value || '');
+        const field1DisplayValue = field1IsPassword && field1Value ? '********' : (field1Value || '');
         
         if (field1IsPassword) {
             html += `
@@ -301,7 +305,7 @@ function renderProviderConfig(provider) {
                                readonly
                                data-config-key="${field1Key}"
                                data-config-value="${field1Value || ''}">
-                        <button type="button" class="btn btn-outline upload-btn" data-target="edit-${provider.uuid}-${field1Key}" aria-label="上传文件" disabled>
+                        <button type="button" class="btn btn-outline upload-btn" data-target="edit-${provider.uuid}-${field1Key}" aria-label="Upload file" disabled>
                             <i class="fas fa-upload"></i>
                         </button>
                     </div>
@@ -327,7 +331,7 @@ function renderProviderConfig(provider) {
             const field2Value = provider[field2Key];
             const field2IsPassword = field2Key.toLowerCase().includes('key') || field2Key.toLowerCase().includes('password');
             const field2IsOAuthFilePath = field2Key.includes('OAUTH_CREDS_FILE_PATH');
-            const field2DisplayValue = field2IsPassword && field2Value ? '••••••••' : (field2Value || '');
+            const field2DisplayValue = field2IsPassword && field2Value ? '********' : (field2Value || '');
             
             if (field2IsPassword) {
                 html += `
@@ -357,7 +361,7 @@ function renderProviderConfig(provider) {
                                    readonly
                                    data-config-key="${field2Key}"
                                    data-config-value="${field2Value || ''}">
-                            <button type="button" class="btn btn-outline upload-btn" data-target="edit-${provider.uuid}-${field2Key}" aria-label="上传文件" disabled>
+                        <button type="button" class="btn btn-outline upload-btn" data-target="edit-${provider.uuid}-${field2Key}" aria-label="Upload file" disabled>
                                 <i class="fas fa-upload"></i>
                             </button>
                         </div>
@@ -389,7 +393,7 @@ function renderProviderConfig(provider) {
  * @returns {Array} 字段键数组
  */
 function getFieldOrder(provider) {
-    const orderedFields = ['checkModelName', 'checkHealth'];
+    const orderedFields = ['vendorName', 'checkModelName', 'checkHealth'];
     
     // 获取所有其他配置项
     const otherFields = Object.keys(provider).filter(key =>
@@ -460,19 +464,19 @@ function editProvider(uuid, event) {
         const toggleButton = actionsGroup.querySelector('[onclick*="toggleProviderStatus"]');
         const currentProvider = providerDetail.closest('.provider-modal').querySelector(`[data-uuid="${uuid}"]`);
         const isCurrentlyDisabled = currentProvider.classList.contains('disabled');
-        const toggleButtonText = isCurrentlyDisabled ? '启用' : '禁用';
+        const toggleButtonText = isCurrentlyDisabled ? 'Enable' : 'Disable';
         const toggleButtonIcon = isCurrentlyDisabled ? 'fas fa-play' : 'fas fa-ban';
         const toggleButtonClass = isCurrentlyDisabled ? 'btn-success' : 'btn-warning';
         
         actionsGroup.innerHTML = `
-            <button class="btn-small ${toggleButtonClass}" onclick="window.toggleProviderStatus('${uuid}', event)" title="${toggleButtonText}此提供商">
+            <button class="btn-small ${toggleButtonClass}" onclick="window.toggleProviderStatus('${uuid}', event)" title="${toggleButtonText} this provider">
                 <i class="${toggleButtonIcon}"></i> ${toggleButtonText}
             </button>
             <button class="btn-small btn-save" onclick="window.saveProvider('${uuid}', event)">
-                <i class="fas fa-save"></i> 保存
+                <i class="fas fa-save"></i> Save
             </button>
             <button class="btn-small btn-cancel" onclick="window.cancelEdit('${uuid}', event)">
-                <i class="fas fa-times"></i> 取消
+                <i class="fas fa-times"></i> Cancel
             </button>
         `;
     }, 100);
@@ -496,7 +500,7 @@ function cancelEdit(uuid, event) {
         // 恢复显示为密码格式（如果有的话）
         if (input.type === 'password') {
             const actualValue = input.dataset.configValue;
-            input.value = actualValue ? '••••••••' : '';
+            input.value = actualValue ? '********' : '';
         }
     });
     
@@ -518,19 +522,19 @@ function cancelEdit(uuid, event) {
     const actionsGroup = providerDetail.querySelector('.provider-actions-group');
     const currentProvider = providerDetail.closest('.provider-modal').querySelector(`[data-uuid="${uuid}"]`);
     const isCurrentlyDisabled = currentProvider.classList.contains('disabled');
-    const toggleButtonText = isCurrentlyDisabled ? '启用' : '禁用';
+    const toggleButtonText = isCurrentlyDisabled ? 'Enable' : 'Disable';
     const toggleButtonIcon = isCurrentlyDisabled ? 'fas fa-play' : 'fas fa-ban';
     const toggleButtonClass = isCurrentlyDisabled ? 'btn-success' : 'btn-warning';
     
     actionsGroup.innerHTML = `
-        <button class="btn-small ${toggleButtonClass}" onclick="window.toggleProviderStatus('${uuid}', event)" title="${toggleButtonText}此提供商">
+        <button class="btn-small ${toggleButtonClass}" onclick="window.toggleProviderStatus('${uuid}', event)" title="${toggleButtonText} this provider">
             <i class="${toggleButtonIcon}"></i> ${toggleButtonText}
         </button>
         <button class="btn-small btn-edit" onclick="window.editProvider('${uuid}', event)">
-            <i class="fas fa-edit"></i> 编辑
+            <i class="fas fa-edit"></i> Edit
         </button>
         <button class="btn-small btn-delete" onclick="window.deleteProvider('${uuid}', event)">
-            <i class="fas fa-trash"></i> 删除
+            <i class="fas fa-trash"></i> Delete
         </button>
     `;
 }
@@ -564,12 +568,12 @@ async function saveProvider(uuid, event) {
     
     try {
         await window.apiClient.put(`/providers/${encodeURIComponent(providerType)}/${uuid}`, { providerConfig });
-        showToast('提供商配置更新成功', 'success');
+        showToast('Provider configuration updated successfully', 'success');
         // 重新获取该提供商类型的最新配置
         await refreshProviderConfig(providerType);
     } catch (error) {
         console.error('Failed to update provider:', error);
-        showToast('更新失败: ' + error.message, 'error');
+        showToast('Update failed: ' + error.message, 'error');
     }
 }
 
@@ -581,7 +585,7 @@ async function saveProvider(uuid, event) {
 async function deleteProvider(uuid, event) {
     event.stopPropagation();
     
-    if (!confirm('确定要删除这个提供商配置吗？此操作不可恢复。')) {
+    if (!confirm('Delete this provider configuration? This action cannot be undone.')) {
         return;
     }
     
@@ -590,12 +594,12 @@ async function deleteProvider(uuid, event) {
     
     try {
         await window.apiClient.delete(`/providers/${encodeURIComponent(providerType)}/${uuid}`);
-        showToast('提供商配置删除成功', 'success');
+        showToast('Provider configuration deleted successfully', 'success');
         // 重新获取最新配置
         await refreshProviderConfig(providerType);
     } catch (error) {
         console.error('Failed to delete provider:', error);
-        showToast('删除失败: ' + error.message, 'error');
+        showToast('Delete failed: ' + error.message, 'error');
     }
 }
 
@@ -640,64 +644,161 @@ async function refreshProviderConfig(providerType) {
 }
 
 /**
- * 显示添加提供商表单
+ * 在模态框中刷新提供商配置（供文件上传后调用）
  * @param {string} providerType - 提供商类型
  */
-function showAddProviderForm(providerType) {
-    const modal = document.querySelector('.provider-modal');
-    const existingForm = modal.querySelector('.add-provider-form');
-    
-    if (existingForm) {
-        existingForm.remove();
-        return;
-    }
-    
-    const form = document.createElement('div');
-    form.className = 'add-provider-form';
-    form.innerHTML = `
-        <h4><i class="fas fa-plus"></i> 添加新提供商配置</h4>
-        <div class="form-grid">
-            <div class="form-group">
-                <label>检查模型名称 <span class="optional-mark">(选填)</span></label>
-                <input type="text" id="newCheckModelName" placeholder="例如: gpt-3.5-turbo">
-            </div>
-            <div class="form-group">
-                <label>健康检查</label>
-                <select id="newCheckHealth">
-                    <option value="true">启用</option>
-                    <option value="false">禁用</option>
-                </select>
-            </div>
-        </div>
-        <div id="dynamicConfigFields">
-            <!-- 动态配置字段将在这里显示 -->
-        </div>
-        <div class="form-actions" style="margin-top: 15px;">
-            <button class="btn btn-success" onclick="window.addProvider('${providerType}')">
-                <i class="fas fa-save"></i> 保存
-            </button>
-            <button class="btn btn-secondary" onclick="this.closest('.add-provider-form').remove()">
-                <i class="fas fa-times"></i> 取消
-            </button>
-        </div>
-    `;
-    
-    // 添加动态配置字段
-    addDynamicConfigFields(form, providerType);
-    
-    // 为添加表单中的密码切换按钮绑定事件监听器
-    bindAddFormPasswordToggleListeners(form);
-    
-    // 插入到提供商列表前面
-    const providerList = modal.querySelector('.provider-list');
-    providerList.parentNode.insertBefore(form, providerList);
+async function refreshProviderConfigInModal(providerType) {
+    await refreshProviderConfig(providerType);
 }
 
 /**
- * 添加动态配置字段
- * @param {HTMLElement} form - 表单元素
+ * 显示添加提供商表单
  * @param {string} providerType - 提供商类型
  */
+/**
+
+ * Render the add-provider form inside the modal.
+
+ * @param {string} providerType - Provider type identifier.
+
+ */
+
+function showAddProviderForm(providerType) {
+
+    const modal = document.querySelector('.provider-modal');
+
+    if (!modal) {
+
+        return;
+
+    }
+
+
+
+    const existingForm = modal.querySelector('.add-provider-form');
+
+    if (existingForm) {
+
+        existingForm.remove();
+
+        return;
+
+    }
+
+
+
+    const providerDisplayName = getProviderDisplayName(providerType);
+
+    const form = document.createElement('div');
+
+    form.className = 'add-provider-form';
+
+
+
+    const showVendorField = providerType.includes('-custom');
+
+    const vendorFieldHtml = showVendorField ? `
+
+        <div class="form-grid">
+
+            <div class="form-group" style="grid-column: 1 / -1;">
+
+                <label>Vendor Name <span class="required-mark" style="color: #e74c3c;">* (required)</span></label>
+
+                <input type="text" id="newVendorName" placeholder="e.g. anyrouter, deepseek, azure, official" required>
+
+                <small style="color: #888; margin-top: 5px; display: block;">
+
+                    <strong>Vendor name is required</strong> to distinguish accounts from the same channel.
+
+                    This value is only used in the console and will not create a new channel or change routing.
+
+                </small>
+
+            </div>
+
+        </div>
+
+    ` : '';
+
+
+
+    form.innerHTML = `
+
+        <h4><i class="fas fa-plus"></i> Add ${providerDisplayName} provider</h4>
+
+        ${vendorFieldHtml}
+
+        <div class="form-grid">
+
+            <div class="form-group">
+
+                <label>Health Check Model <span class="optional-mark">(optional)</span></label>
+
+                <input type="text" id="newCheckModelName" placeholder="e.g. gpt-3.5-turbo">
+
+            </div>
+
+            <div class="form-group">
+
+                <label>Health Check</label>
+
+                <select id="newCheckHealth">
+
+                    <option value="true">Enabled</option>
+
+                    <option value="false">Disabled</option>
+
+                </select>
+
+            </div>
+
+        </div>
+
+        <div id="dynamicConfigFields">
+
+            <!-- Dynamic config fields go here -->
+
+        </div>
+
+        <div class="form-actions" style="margin-top: 15px;">
+
+            <button class="btn btn-success" onclick="window.addProvider('${providerType}')">
+
+                <i class="fas fa-save"></i> Save
+
+            </button>
+
+            <button class="btn btn-secondary" onclick="this.closest('.add-provider-form').remove()">
+
+                <i class="fas fa-times"></i> Cancel
+
+            </button>
+
+        </div>
+
+    `;
+
+
+
+    addDynamicConfigFields(form, providerType);
+
+    bindAddFormPasswordToggleListeners(form);
+
+
+
+    const providerList = modal.querySelector('.provider-list');
+
+    if (providerList && providerList.parentNode) {
+
+        providerList.parentNode.insertBefore(form, providerList);
+
+    }
+
+}
+
+
+
 function addDynamicConfigFields(form, providerType) {
     const configFields = form.querySelector('#dynamicConfigFields');
     
@@ -735,7 +836,7 @@ function addDynamicConfigFields(form, providerType) {
                         <label>${field1.label}</label>
                         <div class="file-input-group">
                             <input type="text" id="new${field1.id}" class="form-control" placeholder="${field1.placeholder || ''}" value="${field1.value || ''}">
-                            <button type="button" class="btn btn-outline upload-btn" data-target="new${field1.id}" aria-label="上传文件">
+                            <button type="button" class="btn btn-outline upload-btn" data-target="new${field1.id}" aria-label="Upload file">
                                 <i class="fas fa-upload"></i>
                             </button>
                         </div>
@@ -776,7 +877,7 @@ function addDynamicConfigFields(form, providerType) {
                             <label>${field2.label}</label>
                             <div class="file-input-group">
                                 <input type="text" id="new${field2.id}" class="form-control" placeholder="${field2.placeholder || ''}" value="${field2.value || ''}">
-                                <button type="button" class="btn btn-outline upload-btn" data-target="new${field2.id}" aria-label="上传文件">
+                                <button type="button" class="btn btn-outline upload-btn" data-target="new${field2.id}" aria-label="Upload file">
                                     <i class="fas fa-upload"></i>
                                 </button>
                             </div>
@@ -833,62 +934,99 @@ function bindAddFormPasswordToggleListeners(form) {
 async function addProvider(providerType) {
     const checkModelName = document.getElementById('newCheckModelName')?.value;
     const checkHealth = document.getElementById('newCheckHealth')?.value === 'true';
+    const vendorName = document.getElementById('newVendorName')?.value?.trim();
+    
+    if (providerType.includes('-custom') && !vendorName) {
+        showToast('Vendor name cannot be empty. Different accounts may have different endpoints or permissions, so please provide a label.', 'error');
+        return;
+    }
     
     const providerConfig = {
-        checkModelName: checkModelName || '', // 允许为空
+        checkModelName: checkModelName || '',
         checkHealth
     };
     
-    // 根据提供商类型收集配置
+    if (vendorName) {
+        providerConfig.vendorName = vendorName;
+    }
+    
     switch (providerType) {
         case 'openai-custom':
             providerConfig.OPENAI_API_KEY = document.getElementById('newOpenaiApiKey')?.value || '';
             providerConfig.OPENAI_BASE_URL = document.getElementById('newOpenaiBaseUrl')?.value || '';
+            if (!providerConfig.OPENAI_API_KEY) {
+                showToast('OpenAI API Key is required', 'error');
+                return;
+            }
             break;
         case 'openaiResponses-custom':
             providerConfig.OPENAI_API_KEY = document.getElementById('newOpenaiApiKey')?.value || '';
             providerConfig.OPENAI_BASE_URL = document.getElementById('newOpenaiBaseUrl')?.value || '';
+            if (!providerConfig.OPENAI_API_KEY) {
+                showToast('OpenAI API Key is required', 'error');
+                return;
+            }
             break;
         case 'claude-custom':
             providerConfig.CLAUDE_API_KEY = document.getElementById('newClaudeApiKey')?.value || '';
             providerConfig.CLAUDE_BASE_URL = document.getElementById('newClaudeBaseUrl')?.value || '';
+            if (!providerConfig.CLAUDE_API_KEY) {
+                showToast('Claude API Key is required', 'error');
+                return;
+            }
             break;
         case 'gemini-cli-oauth':
             providerConfig.PROJECT_ID = document.getElementById('newProjectId')?.value || '';
             providerConfig.GEMINI_OAUTH_CREDS_FILE_PATH = document.getElementById('newGeminiOauthCredsFilePath')?.value || '';
+            if (!providerConfig.GEMINI_OAUTH_CREDS_FILE_PATH) {
+                showToast('OAuth credential file path is required', 'error');
+                return;
+            }
             break;
         case 'claude-kiro-oauth':
             providerConfig.KIRO_OAUTH_CREDS_FILE_PATH = document.getElementById('newKiroOauthCredsFilePath')?.value || '';
+            if (!providerConfig.KIRO_OAUTH_CREDS_FILE_PATH) {
+                showToast('OAuth credential file path is required', 'error');
+                return;
+            }
             break;
         case 'openai-qwen-oauth':
             providerConfig.QWEN_OAUTH_CREDS_FILE_PATH = document.getElementById('newQwenOauthCredsFilePath')?.value || '';
+            if (!providerConfig.QWEN_OAUTH_CREDS_FILE_PATH) {
+                showToast('OAuth credential file path is required', 'error');
+                return;
+            }
             break;
+        default:
+            showToast('Unsupported provider type: ' + providerType, 'error');
+            return;
     }
     
+    console.log('[Add Provider] Provider Type:', providerType);
+    console.log('[Add Provider] Vendor Name:', vendorName || 'none');
+    console.log('[Add Provider] Provider Config:', providerConfig);
+    console.log('[Add Provider] Request URL:', '/providers');
+    console.log('[Add Provider] Full API URL:', window.location.origin + '/api/providers');
+    
     try {
-        await window.apiClient.post('/providers', {
+        console.log('[Add Provider] Sending POST request to /providers...');
+        const response = await window.apiClient.post('/providers', {
             providerType,
             providerConfig
         });
-        showToast('提供商配置添加成功', 'success');
-        // 移除添加表单
+        console.log('[Add Provider] Response received:', response);
+        showToast('Provider added successfully', 'success');
         const form = document.querySelector('.add-provider-form');
         if (form) {
             form.remove();
         }
-        // 重新获取最新配置数据
         await refreshProviderConfig(providerType);
     } catch (error) {
         console.error('Failed to add provider:', error);
-        showToast('添加失败: ' + error.message, 'error');
+        showToast('Add failed: ' + error.message, 'error');
     }
 }
 
-/**
- * 切换提供商禁用/启用状态
- * @param {string} uuid - 提供商UUID
- * @param {Event} event - 事件对象
- */
 async function toggleProviderStatus(uuid, event) {
     event.stopPropagation();
     
@@ -900,8 +1038,8 @@ async function toggleProviderStatus(uuid, event) {
     const isCurrentlyDisabled = currentProvider.classList.contains('disabled');
     const action = isCurrentlyDisabled ? 'enable' : 'disable';
     const confirmMessage = isCurrentlyDisabled ?
-        `确定要启用这个提供商配置吗？` :
-        `确定要禁用这个提供商配置吗？禁用后该提供商将不会被选中使用。`;
+        `Enable this provider configuration?` :
+        `Disable this provider configuration? Disabled providers will not be selected.`;
     
     if (!confirm(confirmMessage)) {
         return;
@@ -909,12 +1047,12 @@ async function toggleProviderStatus(uuid, event) {
     
     try {
         await window.apiClient.post(`/providers/${encodeURIComponent(providerType)}/${uuid}/${action}`, { action });
-        showToast(`提供商${isCurrentlyDisabled ? '启用' : '禁用'}成功`, 'success');
+        showToast(`Provider ${isCurrentlyDisabled ? 'enabled' : 'disabled'} successfully`, 'success');
         // 重新获取该提供商类型的最新配置
         await refreshProviderConfig(providerType);
     } catch (error) {
         console.error('Failed to toggle provider status:', error);
-        showToast(`操作失败: ${error.message}`, 'error');
+        showToast(`Operation failed: ${error.message}`, 'error');
     }
 }
 
@@ -928,6 +1066,7 @@ export {
     saveProvider,
     deleteProvider,
     refreshProviderConfig,
+    refreshProviderConfigInModal,
     showAddProviderForm,
     addProvider,
     toggleProviderStatus
@@ -940,6 +1079,8 @@ window.editProvider = editProvider;
 window.cancelEdit = cancelEdit;
 window.saveProvider = saveProvider;
 window.deleteProvider = deleteProvider;
+window.refreshProviderConfig = refreshProviderConfig;
+window.refreshProviderConfigInModal = refreshProviderConfigInModal;
 window.showAddProviderForm = showAddProviderForm;
 window.addProvider = addProvider;
 window.toggleProviderStatus = toggleProviderStatus;

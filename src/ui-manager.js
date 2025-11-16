@@ -3,7 +3,7 @@ import { promises as fs } from 'fs';
 import path from 'path';
 import multer from 'multer';
 import crypto from 'crypto';
-import { getRequestBody } from './common.js';
+import { getRequestBody, MODEL_PROVIDER } from './common.js';
 import { CONFIG } from './config-manager.js';
 
 // Token存储在内存中（生产环境建议使用Redis）
@@ -293,7 +293,7 @@ export async function handleUIApiRequests(method, pathParam, req, res, currentCo
         }
     }
 
-    // 文件上传API
+    // 文件上传API - 上传后自动添加到 provider_pools.json
     if (method === 'POST' && pathParam === '/api/upload-oauth-credentials') {
         const uploadMiddleware = upload.single('file');
         
@@ -322,6 +322,7 @@ export async function handleUIApiRequests(method, pathParam, req, res, currentCo
 
                 // multer执行完成后，表单字段已解析到req.body中
                 const provider = req.body.provider || 'common';
+                const providerType = req.body.providerType; // 从前端传递的提供商类型
                 const tempFilePath = req.file.path;
                 
                 // 根据实际的provider移动文件到正确的目录
@@ -333,23 +334,123 @@ export async function handleUIApiRequests(method, pathParam, req, res, currentCo
                 
                 const relativePath = path.relative(process.cwd(), targetFilePath);
 
-                // 广播更新事件
+                // 自动添加到 provider_pools.json（如果提供了 providerType）
+                let addedToPool = false;
+                let providerConfig = null;
+                
+                if (providerType) {
+                    try {
+                        // 生成 UUID
+                        const uuid = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+                            const r = Math.random() * 16 | 0;
+                            const v = c == 'x' ? r : (r & 0x3 | 0x8);
+                            return v.toString(16);
+                        });
+
+                        // 根据提供商类型创建配置
+                        providerConfig = {
+                            uuid: uuid,
+                            checkModelName: '',
+                            checkHealth: false,
+                            isHealthy: true,
+                            isDisabled: false,
+                            lastUsed: null,
+                            usageCount: 0,
+                            errorCount: 0,
+                            lastErrorTime: null
+                        };
+
+                        // 根据提供商类型添加对应的凭据路径字段
+                        switch (providerType) {
+                            case 'gemini-cli-oauth':
+                                providerConfig.GEMINI_OAUTH_CREDS_FILE_PATH = relativePath;
+                                providerConfig.PROJECT_ID = '';
+                                break;
+                            case 'claude-kiro-oauth':
+                                providerConfig.KIRO_OAUTH_CREDS_FILE_PATH = relativePath;
+                                break;
+                            case 'openai-qwen-oauth':
+                                providerConfig.QWEN_OAUTH_CREDS_FILE_PATH = relativePath;
+                                break;
+                            default:
+                                console.warn(`[UI API] 未知的提供商类型: ${providerType}，文件已上传但未自动添加到 provider_pools.json`);
+                        }
+
+                        // 只有在识别的提供商类型时才添加到池中
+                        if (providerConfig.GEMINI_OAUTH_CREDS_FILE_PATH ||
+                            providerConfig.KIRO_OAUTH_CREDS_FILE_PATH ||
+                            providerConfig.QWEN_OAUTH_CREDS_FILE_PATH) {
+                            
+                            const filePath = currentConfig.PROVIDER_POOLS_FILE_PATH || 'provider_pools.json';
+                            let providerPools = {};
+                            
+                            // 加载现有池
+                            if (existsSync(filePath)) {
+                                try {
+                                    const fileContent = readFileSync(filePath, 'utf8');
+                                    providerPools = JSON.parse(fileContent);
+                                } catch (readError) {
+                                    console.warn('[UI API] 读取现有 provider_pools.json 失败:', readError.message);
+                                }
+                            }
+
+                            // 添加新提供商到相应类型
+                            if (!providerPools[providerType]) {
+                                providerPools[providerType] = [];
+                            }
+                            providerPools[providerType].push(providerConfig);
+
+                            // 保存到文件
+                            writeFileSync(filePath, JSON.stringify(providerPools, null, 2), 'utf8');
+                            console.log(`[UI API] 已自动添加新提供商到 ${providerType}: ${providerConfig.uuid}`);
+
+                            // 更新 provider pool manager
+                            if (providerPoolManager) {
+                                providerPoolManager.providerPools = providerPools;
+                                providerPoolManager.initializeProviderStatus();
+                            }
+
+                            // 更新 CONFIG 缓存
+                            CONFIG.providerPools = providerPools;
+
+                            addedToPool = true;
+
+                            // 广播提供商更新事件
+                            broadcastEvent('provider_update', {
+                                action: 'add',
+                                providerType,
+                                providerConfig,
+                                timestamp: new Date().toISOString()
+                            });
+                        }
+                    } catch (poolError) {
+                        console.error('[UI API] 自动添加到 provider_pools.json 失败:', poolError.message);
+                        // 文件已上传成功，但添加到池失败，继续返回成功响应
+                    }
+                }
+
+                // 广播文件更新事件
                 broadcastEvent('config_update', {
                     action: 'add',
                     filePath: relativePath,
                     provider: provider,
+                    providerType: providerType,
+                    addedToPool: addedToPool,
                     timestamp: new Date().toISOString()
                 });
 
-                console.log(`[UI API] OAuth凭据文件已上传: ${targetFilePath} (提供商: ${provider})`);
+                console.log(`[UI API] OAuth凭据文件已上传: ${targetFilePath} (提供商: ${provider}${addedToPool ? ', 已自动添加到 provider_pools.json' : ''})`);
 
                 res.writeHead(200, { 'Content-Type': 'application/json' });
                 res.end(JSON.stringify({
                     success: true,
-                    message: '文件上传成功',
+                    message: addedToPool ? '文件上传成功并已自动添加到凭据池' : '文件上传成功',
                     filePath: relativePath,
                     originalName: req.file.originalname,
-                    provider: provider
+                    provider: provider,
+                    providerType: providerType,
+                    addedToPool: addedToPool,
+                    providerConfig: addedToPool ? providerConfig : null
                 }));
 
             } catch (error) {
@@ -391,21 +492,10 @@ export async function handleUIApiRequests(method, pathParam, req, res, currentCo
             const body = await getRequestBody(req);
             const newConfig = body;
 
-            // Update config values in memory
+            // Update config values in memory - ONLY basic config, NO key/auth fields
             if (newConfig.REQUIRED_API_KEY !== undefined) currentConfig.REQUIRED_API_KEY = newConfig.REQUIRED_API_KEY;
             if (newConfig.HOST !== undefined) currentConfig.HOST = newConfig.HOST;
             if (newConfig.SERVER_PORT !== undefined) currentConfig.SERVER_PORT = newConfig.SERVER_PORT;
-            if (newConfig.MODEL_PROVIDER !== undefined) currentConfig.MODEL_PROVIDER = newConfig.MODEL_PROVIDER;
-            if (newConfig.PROJECT_ID !== undefined) currentConfig.PROJECT_ID = newConfig.PROJECT_ID;
-            if (newConfig.OPENAI_API_KEY !== undefined) currentConfig.OPENAI_API_KEY = newConfig.OPENAI_API_KEY;
-            if (newConfig.OPENAI_BASE_URL !== undefined) currentConfig.OPENAI_BASE_URL = newConfig.OPENAI_BASE_URL;
-            if (newConfig.CLAUDE_API_KEY !== undefined) currentConfig.CLAUDE_API_KEY = newConfig.CLAUDE_API_KEY;
-            if (newConfig.CLAUDE_BASE_URL !== undefined) currentConfig.CLAUDE_BASE_URL = newConfig.CLAUDE_BASE_URL;
-            if (newConfig.GEMINI_OAUTH_CREDS_BASE64 !== undefined) currentConfig.GEMINI_OAUTH_CREDS_BASE64 = newConfig.GEMINI_OAUTH_CREDS_BASE64;
-            if (newConfig.GEMINI_OAUTH_CREDS_FILE_PATH !== undefined) currentConfig.GEMINI_OAUTH_CREDS_FILE_PATH = newConfig.GEMINI_OAUTH_CREDS_FILE_PATH;
-            if (newConfig.KIRO_OAUTH_CREDS_BASE64 !== undefined) currentConfig.KIRO_OAUTH_CREDS_BASE64 = newConfig.KIRO_OAUTH_CREDS_BASE64;
-            if (newConfig.KIRO_OAUTH_CREDS_FILE_PATH !== undefined) currentConfig.KIRO_OAUTH_CREDS_FILE_PATH = newConfig.KIRO_OAUTH_CREDS_FILE_PATH;
-            if (newConfig.QWEN_OAUTH_CREDS_FILE_PATH !== undefined) currentConfig.QWEN_OAUTH_CREDS_FILE_PATH = newConfig.QWEN_OAUTH_CREDS_FILE_PATH;
             if (newConfig.SYSTEM_PROMPT_FILE_PATH !== undefined) currentConfig.SYSTEM_PROMPT_FILE_PATH = newConfig.SYSTEM_PROMPT_FILE_PATH;
             if (newConfig.SYSTEM_PROMPT_MODE !== undefined) currentConfig.SYSTEM_PROMPT_MODE = newConfig.SYSTEM_PROMPT_MODE;
             if (newConfig.PROMPT_LOG_BASE_NAME !== undefined) currentConfig.PROMPT_LOG_BASE_NAME = newConfig.PROMPT_LOG_BASE_NAME;
@@ -437,26 +527,15 @@ export async function handleUIApiRequests(method, pathParam, req, res, currentCo
                 }
             }
 
-            // Update config.json file
+            // Update config.json file - ONLY basic config fields
             try {
                 const configPath = 'config.json';
                 
-                // Create a clean config object for saving (exclude runtime-only properties)
+                // Create a clean config object for saving (exclude runtime-only properties and key/auth)
                 const configToSave = {
                     REQUIRED_API_KEY: currentConfig.REQUIRED_API_KEY,
                     SERVER_PORT: currentConfig.SERVER_PORT,
                     HOST: currentConfig.HOST,
-                    MODEL_PROVIDER: currentConfig.MODEL_PROVIDER,
-                    OPENAI_API_KEY: currentConfig.OPENAI_API_KEY,
-                    OPENAI_BASE_URL: currentConfig.OPENAI_BASE_URL,
-                    CLAUDE_API_KEY: currentConfig.CLAUDE_API_KEY,
-                    CLAUDE_BASE_URL: currentConfig.CLAUDE_BASE_URL,
-                    PROJECT_ID: currentConfig.PROJECT_ID,
-                    GEMINI_OAUTH_CREDS_BASE64: currentConfig.GEMINI_OAUTH_CREDS_BASE64,
-                    GEMINI_OAUTH_CREDS_FILE_PATH: currentConfig.GEMINI_OAUTH_CREDS_FILE_PATH,
-                    KIRO_OAUTH_CREDS_BASE64: currentConfig.KIRO_OAUTH_CREDS_BASE64,
-                    KIRO_OAUTH_CREDS_FILE_PATH: currentConfig.KIRO_OAUTH_CREDS_FILE_PATH,
-                    QWEN_OAUTH_CREDS_FILE_PATH: currentConfig.QWEN_OAUTH_CREDS_FILE_PATH,
                     SYSTEM_PROMPT_FILE_PATH: currentConfig.SYSTEM_PROMPT_FILE_PATH,
                     SYSTEM_PROMPT_MODE: currentConfig.SYSTEM_PROMPT_MODE,
                     PROMPT_LOG_BASE_NAME: currentConfig.PROMPT_LOG_BASE_NAME,
@@ -469,7 +548,7 @@ export async function handleUIApiRequests(method, pathParam, req, res, currentCo
                 };
 
                 writeFileSync(configPath, JSON.stringify(configToSave, null, 2), 'utf-8');
-                console.log('[UI API] Configuration saved to config.json');
+                console.log('[UI API] Configuration saved to config.json (credentials managed in provider_pools.json)');
                 
                 // 广播更新事件
                 broadcastEvent('config_update', {
@@ -497,7 +576,7 @@ export async function handleUIApiRequests(method, pathParam, req, res, currentCo
             res.end(JSON.stringify({
                 success: true,
                 message: 'Configuration updated successfully',
-                details: 'Configuration has been updated in both memory and config.json file'
+                details: 'Basic configuration updated in config.json. All credentials are managed in provider_pools.json'
             }));
             return true;
         } catch (error) {
@@ -576,6 +655,17 @@ export async function handleUIApiRequests(method, pathParam, req, res, currentCo
             if (!providerType || !providerConfig) {
                 res.writeHead(400, { 'Content-Type': 'application/json' });
                 res.end(JSON.stringify({ error: { message: 'providerType and providerConfig are required' } }));
+                return true;
+            }
+            
+            const allowedProviderTypes = Object.values(MODEL_PROVIDER);
+            if (!allowedProviderTypes.includes(providerType)) {
+                res.writeHead(400, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({
+                    error: {
+                        message: `Unknown providerType '${providerType}'. Allowed types: ${allowedProviderTypes.join(', ')}`
+                    }
+                }));
                 return true;
             }
 
@@ -1192,39 +1282,12 @@ async function scanConfigFiles(currentConfig, providerPoolManager) {
     const configsPath = path.join(process.cwd(), 'configs');
     
     if (!existsSync(configsPath)) {
-        // console.log('[Config Scanner] configs directory not found, creating empty result');
         return configFiles;
     }
 
     const usedPaths = new Set(); // 存储已使用的路径，用于判断关联状态
 
-    // 从配置中提取所有OAuth凭据文件路径 - 标准化路径格式
-    if (currentConfig.GEMINI_OAUTH_CREDS_FILE_PATH) {
-        const normalizedPath = currentConfig.GEMINI_OAUTH_CREDS_FILE_PATH.replace(/\\/g, '/');
-        usedPaths.add(currentConfig.GEMINI_OAUTH_CREDS_FILE_PATH);
-        usedPaths.add(normalizedPath);
-        if (normalizedPath.startsWith('./')) {
-            usedPaths.add(normalizedPath.slice(2));
-        }
-    }
-    if (currentConfig.KIRO_OAUTH_CREDS_FILE_PATH) {
-        const normalizedPath = currentConfig.KIRO_OAUTH_CREDS_FILE_PATH.replace(/\\/g, '/');
-        usedPaths.add(currentConfig.KIRO_OAUTH_CREDS_FILE_PATH);
-        usedPaths.add(normalizedPath);
-        if (normalizedPath.startsWith('./')) {
-            usedPaths.add(normalizedPath.slice(2));
-        }
-    }
-    if (currentConfig.QWEN_OAUTH_CREDS_FILE_PATH) {
-        const normalizedPath = currentConfig.QWEN_OAUTH_CREDS_FILE_PATH.replace(/\\/g, '/');
-        usedPaths.add(currentConfig.QWEN_OAUTH_CREDS_FILE_PATH);
-        usedPaths.add(normalizedPath);
-        if (normalizedPath.startsWith('./')) {
-            usedPaths.add(normalizedPath.slice(2));
-        }
-    }
-
-    // 使用最新的提供商池数据
+    // 使用最新的提供商池数据 - 所有凭据现在都在 provider_pools.json 中
     let providerPools = currentConfig.providerPools;
     if (providerPoolManager && providerPoolManager.providerPools) {
         providerPools = providerPoolManager.providerPools;
@@ -1234,28 +1297,23 @@ async function scanConfigFiles(currentConfig, providerPoolManager) {
     if (providerPools) {
         for (const [providerType, providers] of Object.entries(providerPools)) {
             for (const provider of providers) {
-                if (provider.GEMINI_OAUTH_CREDS_FILE_PATH) {
-                    const normalizedPath = provider.GEMINI_OAUTH_CREDS_FILE_PATH.replace(/\\/g, '/');
-                    usedPaths.add(provider.GEMINI_OAUTH_CREDS_FILE_PATH);
-                    usedPaths.add(normalizedPath);
-                    if (normalizedPath.startsWith('./')) {
-                        usedPaths.add(normalizedPath.slice(2));
-                    }
-                }
-                if (provider.KIRO_OAUTH_CREDS_FILE_PATH) {
-                    const normalizedPath = provider.KIRO_OAUTH_CREDS_FILE_PATH.replace(/\\/g, '/');
-                    usedPaths.add(provider.KIRO_OAUTH_CREDS_FILE_PATH);
-                    usedPaths.add(normalizedPath);
-                    if (normalizedPath.startsWith('./')) {
-                        usedPaths.add(normalizedPath.slice(2));
-                    }
-                }
-                if (provider.QWEN_OAUTH_CREDS_FILE_PATH) {
-                    const normalizedPath = provider.QWEN_OAUTH_CREDS_FILE_PATH.replace(/\\/g, '/');
-                    usedPaths.add(provider.QWEN_OAUTH_CREDS_FILE_PATH);
-                    usedPaths.add(normalizedPath);
-                    if (normalizedPath.startsWith('./')) {
-                        usedPaths.add(normalizedPath.slice(2));
+                // 检查各种可能的凭据字段
+                const credentialFields = [
+                    'GEMINI_OAUTH_CREDS_FILE_PATH',
+                    'KIRO_OAUTH_CREDS_FILE_PATH',
+                    'QWEN_OAUTH_CREDS_FILE_PATH',
+                    'OPENAI_API_KEY',
+                    'CLAUDE_API_KEY'
+                ];
+                
+                for (const field of credentialFields) {
+                    if (provider[field]) {
+                        const normalizedPath = provider[field].replace(/\\/g, '/');
+                        usedPaths.add(provider[field]);
+                        usedPaths.add(normalizedPath);
+                        if (normalizedPath.startsWith('./')) {
+                            usedPaths.add(normalizedPath.slice(2));
+                        }
                     }
                 }
             }
@@ -1383,39 +1441,7 @@ function getFileUsageInfo(relativePath, fileName, usedPaths, currentConfig) {
 
     usageInfo.isUsed = true;
 
-    // 检查主要配置中的使用情况
-    if (currentConfig.GEMINI_OAUTH_CREDS_FILE_PATH &&
-        (pathsEqual(relativePath, currentConfig.GEMINI_OAUTH_CREDS_FILE_PATH) ||
-         pathsEqual(relativePath, currentConfig.GEMINI_OAUTH_CREDS_FILE_PATH.replace(/\\/g, '/')))) {
-        usageInfo.usageType = 'main_config';
-        usageInfo.usageDetails.push({
-            type: '主要配置',
-            location: 'Gemini OAuth凭据文件路径',
-            configKey: 'GEMINI_OAUTH_CREDS_FILE_PATH'
-        });
-    }
-
-    if (currentConfig.KIRO_OAUTH_CREDS_FILE_PATH &&
-        (pathsEqual(relativePath, currentConfig.KIRO_OAUTH_CREDS_FILE_PATH) ||
-         pathsEqual(relativePath, currentConfig.KIRO_OAUTH_CREDS_FILE_PATH.replace(/\\/g, '/')))) {
-        usageInfo.usageType = 'main_config';
-        usageInfo.usageDetails.push({
-            type: '主要配置',
-            location: 'Kiro OAuth凭据文件路径',
-            configKey: 'KIRO_OAUTH_CREDS_FILE_PATH'
-        });
-    }
-
-    if (currentConfig.QWEN_OAUTH_CREDS_FILE_PATH &&
-        (pathsEqual(relativePath, currentConfig.QWEN_OAUTH_CREDS_FILE_PATH) ||
-         pathsEqual(relativePath, currentConfig.QWEN_OAUTH_CREDS_FILE_PATH.replace(/\\/g, '/')))) {
-        usageInfo.usageType = 'main_config';
-        usageInfo.usageDetails.push({
-            type: '主要配置',
-            location: 'Qwen OAuth凭据文件路径',
-            configKey: 'QWEN_OAUTH_CREDS_FILE_PATH'
-        });
-    }
+    // 所有凭据现在都在 provider_pools.json 中管理，不再检查 config.json
 
     // 检查提供商池中的使用情况
     if (currentConfig.providerPools) {

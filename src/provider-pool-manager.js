@@ -58,37 +58,44 @@ export class ProviderPoolManager {
      * @param {string} providerType - The type of provider to select (e.g., 'gemini-cli', 'openai-custom').
      * @returns {object|null} The selected provider's configuration, or null if no healthy provider is found.
      */
-    selectProvider(providerType) {
-        const availableProviders = this.providerStatus[providerType] || [];
-        const availableAndHealthyProviders = availableProviders.filter(p =>
-            p.config.isHealthy && !p.config.isDisabled
-        );
-
-        if (availableAndHealthyProviders.length === 0) {
-            console.warn(`[ProviderPoolManager] No available and healthy providers for type: ${providerType}`);
-            return null;
-        }
-
-        // 优化3: 简化轮询逻辑，移除不必要的循环
-        const currentIndex = this.roundRobinIndex[providerType] || 0;
-        const providerIndex = currentIndex % availableAndHealthyProviders.length;
-        const selected = availableAndHealthyProviders[providerIndex];
-        
-        // 更新下次轮询的索引
-        this.roundRobinIndex[providerType] = (providerIndex + 1) % availableAndHealthyProviders.length;
-        
-        // 更新使用信息
-        selected.config.lastUsed = new Date().toISOString();
-        selected.config.usageCount++;
-
-        console.log(`[ProviderPoolManager] Selected provider for ${providerType} (round-robin): ${JSON.stringify(selected.config)}`);
-        
-        // 优化1: 使用防抖保存
-        this._debouncedSave(providerType);
-        
-        return selected.config;
-    }
-
+    selectProvider(providerType, preferredUuid = null) {
+        const availableProviders = this.providerStatus[providerType] || [];
+        const availableAndHealthyProviders = availableProviders.filter(p =>
+            p.config.isHealthy && !p.config.isDisabled
+        );
+
+        if (availableAndHealthyProviders.length === 0) {
+            console.warn(`[ProviderPoolManager] No available and healthy providers for type: ${providerType}`);
+            return null;
+        }
+
+        const normalizedPreferredUuid = preferredUuid ? preferredUuid.toLowerCase() : null;
+        if (normalizedPreferredUuid) {
+            const preferredProvider = availableAndHealthyProviders.find(p => (p.uuid || '').toLowerCase() === normalizedPreferredUuid);
+            if (preferredProvider) {
+                preferredProvider.config.lastUsed = new Date().toISOString();
+                preferredProvider.config.usageCount++;
+                console.log(`[ProviderPoolManager] Selected preferred provider for ${providerType}: ${preferredProvider.uuid}`);
+                this._debouncedSave(providerType);
+                return preferredProvider.config;
+            }
+            console.warn(`[ProviderPoolManager] Preferred provider ${preferredUuid} not available for ${providerType}, falling back to round-robin`);
+        }
+
+        const currentIndex = this.roundRobinIndex[providerType] || 0;
+        const providerIndex = currentIndex % availableAndHealthyProviders.length;
+        const selected = availableAndHealthyProviders[providerIndex];
+
+        this.roundRobinIndex[providerType] = (providerIndex + 1) % availableAndHealthyProviders.length;
+        selected.config.lastUsed = new Date().toISOString();
+        selected.config.usageCount++;
+
+        console.log(`[ProviderPoolManager] Selected provider for ${providerType} (round-robin): ${JSON.stringify(selected.config)}`);
+
+        this._debouncedSave(providerType);
+        return selected.config;
+    }
+
     /**
      * Marks a provider as unhealthy (e.g., after an API error).
      * @param {string} providerType - The type of the provider.

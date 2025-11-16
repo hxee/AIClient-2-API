@@ -6,7 +6,6 @@ import { ApiServiceAdapter } from './adapter.js'; // Import ApiServiceAdapter
 import { convertData, getOpenAIStreamChunkStop, getOpenAIResponsesStreamChunkBegin, getOpenAIResponsesStreamChunkEnd } from './convert.js';
 import { ProviderStrategyFactory } from './provider-strategies.js';
 import { getApiService } from './service-manager.js';
-import { getAllUniqueModels } from './warp/warp-models.js';
 
 export const API_ACTIONS = {
     GENERATE_CONTENT: 'generateContent',
@@ -20,7 +19,6 @@ export const MODEL_PROTOCOL_PREFIX = {
     OPENAI_RESPONSES: 'openaiResponses',
     CLAUDE: 'claude',
     OLLAMA: 'ollama',
-    WARP: 'warp',
 }
 
 export const MODEL_PROVIDER = {
@@ -31,7 +29,47 @@ export const MODEL_PROVIDER = {
     CLAUDE_CUSTOM: 'claude-custom',
     KIRO_API: 'claude-kiro-oauth',
     QWEN_API: 'openai-qwen-oauth',
-    WARP_API: 'warp-api',
+}
+
+/**
+ * Generate display prefix for a provider type
+ * Supports compound provider names like "openai-custom-anyrouter"
+ * @param {string} providerType - Provider type key (e.g., "openai-custom-anyrouter")
+ * @returns {string} Display prefix (e.g., "[OpenAI-AnyRouter]")
+ */
+export function getProviderDisplayPrefix(providerType) {
+    if (!providerType) return '';
+    
+    // Parse provider type: {protocol}-{source}[-{vendor}]
+    const parts = providerType.split('-');
+    
+    if (parts.length === 0) return '';
+    
+    // Capitalize first letter of each part
+    const capitalize = (str) => str.charAt(0).toUpperCase() + str.slice(1);
+    
+    // Handle known provider type patterns
+    if (parts.length === 2) {
+        // e.g., "openai-custom" -> "[OpenAI]"
+        // e.g., "gemini-cli" -> "[Gemini CLI]"
+        const protocol = capitalize(parts[0]);
+        const source = parts[1] === 'oauth' ? 'CLI' : capitalize(parts[1]);
+        
+        // Special handling for standard providers
+        if (parts[1] === 'custom') {
+            return `[${protocol}]`;
+        }
+        return `[${protocol} ${source}]`;
+    } else if (parts.length >= 3) {
+        // e.g., "openai-custom-anyrouter" -> "[OpenAI-AnyRouter]"
+        // e.g., "claude-kiro-oauth" -> "[Claude-Kiro]"
+        const protocol = capitalize(parts[0]);
+        const vendor = parts.slice(2).map(capitalize).join('-');
+        return `[${protocol}-${vendor}]`;
+    } else {
+        // Fallback for single part
+        return `[${capitalize(parts[0])}]`;
+    }
 }
 
 /**
@@ -40,14 +78,36 @@ export const MODEL_PROVIDER = {
  * but are removed before sending to actual providers
  */
 export const MODEL_PREFIX_MAP = {
-    [MODEL_PROVIDER.WARP_API]: '[Warp]',
     [MODEL_PROVIDER.KIRO_API]: '[Kiro]',
-    [MODEL_PROVIDER.CLAUDE_CUSTOM]: '[Claude API]',
+    [MODEL_PROVIDER.CLAUDE_CUSTOM]: '[Claude]',
     [MODEL_PROVIDER.GEMINI_CLI]: '[Gemini CLI]',
     [MODEL_PROVIDER.OPENAI_CUSTOM]: '[OpenAI]',
     [MODEL_PROVIDER.QWEN_API]: '[Qwen CLI]',
     [MODEL_PROVIDER.OPENAI_CUSTOM_RESPONSES]: '[OpenAI Responses]',
 }
+
+const PROVIDER_ALIAS = {
+    [MODEL_PROVIDER.GEMINI_CLI]: 'gemini',
+    [MODEL_PROVIDER.QWEN_API]: 'qwen',
+    [MODEL_PROVIDER.KIRO_API]: 'kiro',
+    [MODEL_PROVIDER.OPENAI_CUSTOM]: 'chat',
+    [MODEL_PROVIDER.OPENAI_CUSTOM_RESPONSES]: 'responses',
+    [MODEL_PROVIDER.CLAUDE_CUSTOM]: 'claude',
+};
+
+const PROVIDER_VENDOR_REQUIRED = new Set([
+    MODEL_PROVIDER.OPENAI_CUSTOM,
+    MODEL_PROVIDER.OPENAI_CUSTOM_RESPONSES,
+    MODEL_PROVIDER.CLAUDE_CUSTOM
+]);
+
+const ALIAS_TO_PROVIDER_TYPES = Object.entries(PROVIDER_ALIAS).reduce((map, [providerType, alias]) => {
+    if (!alias) return map;
+    const key = alias.toLowerCase();
+    if (!map[key]) map[key] = [];
+    map[key].push(providerType);
+    return map;
+}, {});
 
 /**
  * Extracts the protocol prefix from a given model provider string.
@@ -59,10 +119,6 @@ export function getProtocolPrefix(provider) {
     const hyphenIndex = provider.indexOf('-');
     if (hyphenIndex !== -1) {
         const prefix = provider.substring(0, hyphenIndex);
-        // Warp uses OpenAI-compatible protocol
-        if (prefix === 'warp') {
-            return MODEL_PROTOCOL_PREFIX.OPENAI;
-        }
         return prefix;
     }
     return provider; // Return original if no hyphen is found
@@ -74,7 +130,15 @@ export function getProtocolPrefix(provider) {
  * @param {string} provider - Provider type
  * @returns {string} Model name with prefix
  */
-export function addModelPrefix(modelName, provider) {
+function sanitizeVendorName(name) {
+    return (name || '')
+        .replace(/[\[\]\s]+/g, '-')
+        .replace(/[^a-zA-Z0-9_-]/g, '-')
+        .replace(/-+/g, '-')
+        .trim();
+}
+
+export function addModelPrefix(modelName, provider, options = {}) {
     if (!modelName) return modelName;
     
     // Don't add prefix if already exists
@@ -82,11 +146,27 @@ export function addModelPrefix(modelName, provider) {
         return modelName;
     }
     
-    const prefix = MODEL_PREFIX_MAP[provider];
-    if (!prefix) {
-        return modelName;
+    const { vendorName } = options;
+    const alias = PROVIDER_ALIAS[provider];
+    
+    let prefixText = alias || '';
+    if (!prefixText) {
+        const dynamic = getProviderDisplayPrefix(provider);
+        if (dynamic && dynamic !== '[]') {
+            prefixText = dynamic.replace(/^\[|\]$/g, '').toLowerCase();
+        } else {
+            prefixText = provider;
+        }
     }
-    return `${prefix} ${modelName}`;
+    
+    if (PROVIDER_VENDOR_REQUIRED.has(provider) && vendorName) {
+        const sanitizedVendor = sanitizeVendorName(vendorName).toLowerCase();
+        if (sanitizedVendor) {
+            prefixText = `${prefixText}-${sanitizedVendor}`;
+        }
+    }
+    
+    return `[${prefixText}] ${modelName}`;
 }
 
 /**
@@ -99,7 +179,7 @@ export function removeModelPrefix(modelName) {
         return modelName;
     }
     
-    // Remove any prefix pattern like [Warp], [Kiro], etc.
+    // Remove any prefix pattern like [Kiro], [Gemini], etc.
     const prefixPattern = /^\[.*?\]\s+/;
     return modelName.replace(prefixPattern, '');
 }
@@ -138,126 +218,146 @@ export function getProviderFromPrefix(modelName) {
  * @param {string} format - Format type ('openai', 'gemini', 'ollama')
  * @returns {Array} Models with prefixed names
  */
-export function addPrefixToModels(models, provider, format = 'openai') {
+export function addPrefixToModels(models, provider, format = 'openai', providerInfo = {}) {
     if (!Array.isArray(models)) return models;
+    
+    const prefixOptions = {
+        vendorName: providerInfo.vendorName,
+        providerUuid: providerInfo.uuid
+    };
     
     return models.map(model => {
         if (format === 'openai') {
-            return { ...model, id: addModelPrefix(model.id, provider) };
+            return { ...model, id: addModelPrefix(model.id, provider, prefixOptions) };
         } else if (format === 'ollama') {
             return {
                 ...model,
-                name: addModelPrefix(model.name, provider),
-                model: addModelPrefix(model.model || model.name, provider)
+                name: addModelPrefix(model.name, provider, prefixOptions),
+                model: addModelPrefix(model.model || model.name, provider, prefixOptions)
             };
         } else {
             // gemini/claude format
             return {
                 ...model,
-                name: addModelPrefix(model.name, provider),
-                displayName: model.displayName ? addModelPrefix(model.displayName, provider) : undefined
+                name: addModelPrefix(model.name, provider, prefixOptions),
+                displayName: model.displayName ? addModelPrefix(model.displayName, provider, prefixOptions) : undefined
             };
         }
     });
 }
 
 /**
+ * Extract vendor name from model prefix
+ * @param {string} modelName - Model name with prefix like "[OpenAI-AnyRouter] model"
+ * @returns {{protocol: string|null, vendor: string|null, providerUuid: string|null}} Protocol, vendor and provider uuid
+ */
+export function extractPrefixInfo(modelName) {
+    if (!modelName) {
+        return { alias: null, vendor: null };
+    }
+    
+    const match = modelName.match(/^\[(.*?)\]/);
+    if (!match) {
+        return { alias: null, vendor: null };
+    }
+    
+    const prefixText = match[1];
+    const parts = prefixText.split('-').map(p => p.trim()).filter(Boolean);
+    
+    if (parts.length === 0) {
+        return { alias: null, vendor: null };
+    }
+    
+    const alias = parts[0].toLowerCase();
+    const vendor = parts.length > 1 ? parts.slice(1).join('-').toLowerCase() : null;
+    
+    return { alias, vendor };
+}
+
+/**
+ * Find matching provider pool key based on protocol and vendor
+ * @param {string} protocol - Protocol name (e.g., "openai", "gemini")
+ * @param {string|null} vendor - Vendor name (e.g., "anyrouter", "deepseek")
+ * @param {Object} providerPools - Available provider pools
+ * @param {string|null} providerUuid - Specific provider UUID if encoded in prefix
+ * @returns {{providerType: string, providerConfig: Object}|null} Matching provider info
+ */
+export function findMatchingProviderKey(alias, vendor, providerPools) {
+    if (!alias || !providerPools) {
+        return null;
+    }
+    
+    const normalize = (value) => (value || '').toLowerCase();
+    const candidateProviderTypes = ALIAS_TO_PROVIDER_TYPES[alias] || [];
+    const availableKeys = candidateProviderTypes.length > 0 ? candidateProviderTypes : Object.keys(providerPools);
+    
+    if (vendor) {
+        const normalizedVendor = normalize(vendor);
+        for (const key of availableKeys) {
+            const providers = providerPools[key] || [];
+            const matchedProvider = providers.find(p =>
+                normalize(p.vendorName) === normalizedVendor &&
+                !p.isDisabled &&
+                p.isHealthy !== false
+            );
+            if (matchedProvider) {
+                console.log(`[Provider Selection] vendorName match found: ${key} (${matchedProvider.vendorName})`);
+                return { providerType: key, providerConfig: matchedProvider };
+            }
+        }
+    }
+    
+    for (const key of availableKeys) {
+        const providers = providerPools[key] || [];
+        const healthyProvider = providers.find(p => p.isHealthy && !p.isDisabled);
+        if (healthyProvider) {
+            console.log(`[Provider Selection] Alias match found: ${alias} -> ${key}`);
+            return { providerType: key, providerConfig: healthyProvider };
+        }
+    }
+    
+    return null;
+}
+
+/**
  * Determine which provider to use based on model name
- * @param {string} modelName - Model name (may include prefix like "[Warp] gpt-5")
+ * @param {string} modelName - Model name (may include prefix like "[OpenAI-AnyRouter] gpt-4")
  * @param {Object} providerPoolManager - Provider pool manager
  * @param {string} defaultProvider - Default provider
  * @returns {string} Provider type
  */
 export function getProviderByModelName(modelName, providerPoolManager, defaultProvider) {
+    const defaultResult = {
+        providerType: defaultProvider,
+        providerConfig: null
+    };
+    
     if (!modelName || !providerPoolManager || !providerPoolManager.providerPools) {
-        return defaultProvider;
+        console.log(`[Provider Selection] Missing required parameters, using default: ${defaultProvider}`);
+        return defaultResult;
     }
     
-    // First, check if model name has a prefix that directly indicates the provider
-    const providerFromPrefix = getProviderFromPrefix(modelName);
-    if (providerFromPrefix) {
-        console.log(`[Provider Selection] Provider determined from prefix: ${providerFromPrefix}`);
-        return providerFromPrefix;
-    }
+    console.log(`[Provider Selection] Processing model: ${modelName}`);
     
-    // Remove prefix for further analysis
-    const cleanModelName = removeModelPrefix(modelName);
-    const lowerModelName = cleanModelName.toLowerCase();
+    // Step 1: Extract prefix information
+    const { alias, vendor } = extractPrefixInfo(modelName);
     
-    // IMPORTANT: Check Warp models FIRST before checking GPT/Claude
-    // Warp models include names like 'gpt-5', 'claude-4-sonnet' which would match other providers
-    try {
-        const warpModels = getAllUniqueModels();
-        const isWarpModel = warpModels.some(m => m.id.toLowerCase() === lowerModelName);
+    if (alias) {
+        // Step 2: Try to find match based on alias/vendor
+        const matchedKey = findMatchingProviderKey(
+            alias,
+            vendor,
+            providerPoolManager.providerPools
+        );
+        if (matchedKey) {
+            return matchedKey;
+        }
         
-        if (isWarpModel) {
-            // Find available Warp provider
-            for (const [providerType, providers] of Object.entries(providerPoolManager.providerPools)) {
-                if (providerType.includes('warp')) {
-                    const healthyProvider = providers.find(p => p.isHealthy);
-                    if (healthyProvider) {
-                        return providerType;
-                    }
-                }
-            }
-        }
-    } catch (error) {
-        console.warn('[Provider Selection] Failed to check Warp models:', error.message);
+        console.log(`[Provider Selection] No match found for prefix [${alias}${vendor ? '-' + vendor : ''}], falling back to default`);
     }
     
-    // Check if it's a Claude model
-    if (lowerModelName.includes('claude') || lowerModelName.includes('sonnet') || lowerModelName.includes('opus') || lowerModelName.includes('haiku')) {
-        // Find available Claude provider
-        for (const [providerType, providers] of Object.entries(providerPoolManager.providerPools)) {
-            if (providerType.includes('claude') || providerType.includes('kiro')) {
-                const healthyProvider = providers.find(p => p.isHealthy);
-                if (healthyProvider) {
-                    return providerType;
-                }
-            }
-        }
-    }
-    
-    // Check if it's a Gemini model
-    if (lowerModelName.includes('gemini')) {
-        // Find available Gemini provider
-        for (const [providerType, providers] of Object.entries(providerPoolManager.providerPools)) {
-            if (providerType.includes('gemini')) {
-                const healthyProvider = providers.find(p => p.isHealthy);
-                if (healthyProvider) {
-                    return providerType;
-                }
-            }
-        }
-    }
-    
-    // Check if it's a Qwen model
-    if (lowerModelName.includes('qwen')) {
-        // Find available Qwen provider
-        for (const [providerType, providers] of Object.entries(providerPoolManager.providerPools)) {
-            if (providerType.includes('qwen')) {
-                const healthyProvider = providers.find(p => p.isHealthy);
-                if (healthyProvider) {
-                    return providerType;
-                }
-            }
-        }
-    }
-    
-    // Check if it's a GPT model
-    if (lowerModelName.includes('gpt')) {
-        // Find available OpenAI provider
-        for (const [providerType, providers] of Object.entries(providerPoolManager.providerPools)) {
-            if (providerType.includes('openai')) {
-                const healthyProvider = providers.find(p => p.isHealthy);
-                if (healthyProvider) {
-                    return providerType;
-                }
-            }
-        }
-    }
-    
-    return defaultProvider;
+    console.log(`[Provider Selection] No suitable provider found, using default: ${defaultProvider}`);
+    return defaultResult;
 }
 
 export const ENDPOINT_TYPE = {
@@ -449,14 +549,7 @@ export async function handleStreamRequest(res, service, model, requestBody, from
         }
 
     }  catch (error) {
-        console.error('\n[Server] Error during stream processing:', error.stack);
-        if (providerPoolManager) {
-            console.log(`[Provider Pool] Marking ${toProvider} as unhealthy due to stream error`);
-            // 如果是号池模式，并且请求处理失败，则标记当前使用的提供者为不健康
-            providerPoolManager.markProviderUnhealthy(toProvider, {
-                uuid: pooluuid
-            });
-        }
+        console.error('\n[Server] Error during stream processing:', error.stack);        // Skip marking providers unhealthy on stream errors to avoid disabling entire pools
 
         if (!res.writableEnded) {
             const errorPayload = { error: { message: "An error occurred during streaming.", details: error.message } };
@@ -495,13 +588,7 @@ export async function handleUnaryRequest(res, service, model, requestBody, fromP
         await logConversation('output', responseText, PROMPT_LOG_MODE, PROMPT_LOG_FILENAME);
         // fs.writeFile('oldResponse'+Date.now()+'.json', JSON.stringify(clientResponse));
     } catch (error) {
-        console.error('\n[Server] Error during unary processing:', error.stack);
-        if (providerPoolManager) {
-            // 如果是号池模式，并且请求处理失败，则标记当前使用的提供者为不健康
-            providerPoolManager.markProviderUnhealthy(toProvider, {
-                uuid: pooluuid
-            });
-        }
+        console.error('\n[Server] Error during unary processing:', error.stack);        // Skip marking providers unhealthy on unary errors; fallback logic handles retries
 
         // 返回错误响应给客户端
         const errorResponse = {
@@ -532,64 +619,125 @@ export async function handleModelListRequest(req, res, service, endpointType, CO
             [ENDPOINT_TYPE.GEMINI_MODEL_LIST]: MODEL_PROTOCOL_PREFIX.GEMINI,
         };
 
-
         const fromProvider = clientProviderMap[endpointType];
-        const toProvider = CONFIG.MODEL_PROVIDER;
 
         if (!fromProvider) {
             throw new Error(`Unsupported endpoint type for model list: ${endpointType}`);
         }
 
-        // Helper function to fetch and process models from a provider
-        const fetchProviderModels = async (providerType, providerService) => {
-            try {
-                const models = await providerService.listModels();
-                
-                // Convert if necessary
-                let converted = models;
-                if (!getProtocolPrefix(providerType).includes(getProtocolPrefix(fromProvider))) {
-                    converted = convertData(models, 'modelList', providerType, fromProvider);
+        console.log(`\n[ModelList] Starting model list request for format: ${fromProvider}`);
+
+        // Helper function to fetch and process models from a provider with timeout
+        const fetchProviderModels = async (providerType, providerService, providerInfo = {}) => {
+            const timeout = 3000; // 3 second timeout per provider
+            const startTime = Date.now();
+            
+            console.log(`[ModelList] Fetching models from ${providerType}...`);
+            
+            const fetchPromise = (async () => {
+                try {
+                    const models = await providerService.listModels();
+                    const elapsed = Date.now() - startTime;
+                    
+                    // Convert if necessary
+                    let converted = models;
+                    if (!getProtocolPrefix(providerType).includes(getProtocolPrefix(fromProvider))) {
+                        converted = convertData(models, 'modelList', providerType, fromProvider);
+                    }
+                    
+                    // Determine format and add prefixes
+                    const format = fromProvider === MODEL_PROTOCOL_PREFIX.OPENAI ? 'openai' : 'gemini';
+                    let modelList = [];
+                    if (converted?.models) {
+                        modelList = addPrefixToModels(converted.models, providerType, format, providerInfo);
+                    } else if (converted?.data) {
+                        modelList = addPrefixToModels(converted.data, providerType, format, providerInfo);
+                    }
+                    
+                    console.log(`[ModelList] ✓ Successfully fetched ${modelList.length} models from ${providerType} (${elapsed}ms)`);
+                    return modelList;
+                } catch (error) {
+                    const elapsed = Date.now() - startTime;
+                    console.error(`[ModelList] ✗ Failed to fetch models from ${providerType} (${elapsed}ms): ${error.message}`);
+                    return [];
                 }
-                
-                // Determine format and add prefixes
-                const format = fromProvider === MODEL_PROTOCOL_PREFIX.OPENAI ? 'openai' : 'gemini';
-                if (converted?.models) {
-                    return addPrefixToModels(converted.models, providerType, format);
-                } else if (converted?.data) {
-                    return addPrefixToModels(converted.data, providerType, format);
-                }
-                return [];
-            } catch (error) {
-                console.error(`[ModelList] Error from ${providerType}:`, error.message);
-                return [];
-            }
+            })();
+            
+            // Add timeout wrapper
+            const timeoutPromise = new Promise((resolve) => {
+                setTimeout(() => {
+                    console.error(`[ModelList] ✗ Timeout fetching models from ${providerType} after ${timeout}ms`);
+                    resolve([]);
+                }, timeout);
+            });
+            
+            return Promise.race([fetchPromise, timeoutPromise]);
         };
         
-        // Collect all fetch promises
+        // Only fetch from provider_pools.json configured providers
         const fetchPromises = [];
+        const providersList = [];
         
-        // 1. Fetch from current provider
-        fetchPromises.push(fetchProviderModels(toProvider, service));
+        if (!providerPoolManager?.providerPools) {
+            console.warn(`[ModelList] No provider pools configured. Please configure provider_pools.json`);
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify(fromProvider === MODEL_PROTOCOL_PREFIX.OPENAI ? { object: 'list', data: [] } : { models: [] }));
+            return;
+        }
         
-        // 2. Fetch from provider pools in parallel
-        if (providerPoolManager?.providerPools) {
-            const { getServiceAdapter } = await import('./adapter.js');
+        const { getServiceAdapter } = await import('./adapter.js');
+        
+        console.log(`[ModelList] Configured providers in provider_pools.json:`, Object.keys(providerPoolManager.providerPools));
+        
+        // Fetch only from provider pools
+        for (const [providerType, providers] of Object.entries(providerPoolManager.providerPools)) {
+            // Find healthy and enabled provider
+            const healthyProviders = providers.filter(p => p.isHealthy && !p.isDisabled);
             
-            for (const [providerType, providers] of Object.entries(providerPoolManager.providerPools)) {
-                if (providerType === toProvider) continue;
-                
-                const healthyProvider = providers.find(p => p.isHealthy);
-                if (healthyProvider) {
-                    const tempConfig = { ...CONFIG, ...healthyProvider, MODEL_PROVIDER: providerType };
-                    const tempService = getServiceAdapter(tempConfig);
-                    fetchPromises.push(fetchProviderModels(providerType, tempService));
-                }
+            if (healthyProviders.length === 0) {
+                console.warn(`[ModelList] ⚠ ${providerType}: No healthy providers available (total: ${providers.length}, healthy: 0)`);
+                continue;
+            }
+            
+            console.log(`[ModelList] ${providerType}: Found ${healthyProviders.length} healthy provider(s)`);
+            
+            // Use the first healthy provider
+            const healthyProvider = healthyProviders[0];
+            
+            try {
+                const tempConfig = { ...CONFIG, ...healthyProvider, MODEL_PROVIDER: providerType };
+                const tempService = getServiceAdapter(tempConfig);
+                providersList.push(providerType);
+                fetchPromises.push(fetchProviderModels(providerType, tempService, healthyProvider));
+            } catch (error) {
+                console.error(`[ModelList] ✗ Failed to initialize service for ${providerType}: ${error.message}`);
             }
         }
         
-        // Execute all fetches in parallel and flatten results
-        const results = await Promise.all(fetchPromises);
-        const allModels = results.flat();
+        if (fetchPromises.length === 0) {
+            console.warn(`[ModelList] No providers available to fetch models from`);
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify(fromProvider === MODEL_PROTOCOL_PREFIX.OPENAI ? { object: 'list', data: [] } : { models: [] }));
+            return;
+        }
+        
+        console.log(`[ModelList] Fetching models from ${fetchPromises.length} provider(s): ${providersList.join(', ')}`);
+        
+        // Execute all fetches in parallel with Promise.allSettled to handle failures gracefully
+        const results = await Promise.allSettled(fetchPromises);
+        const allModels = results
+            .filter(r => r.status === 'fulfilled')
+            .map(r => r.value)
+            .flat();
+        
+        // Log any rejections
+        const rejectedCount = results.filter(r => r.status === 'rejected').length;
+        if (rejectedCount > 0) {
+            console.error(`[ModelList] ${rejectedCount} provider(s) failed to fetch models`);
+            results
+                .filter(r => r.status === 'rejected')
+                .forEach((r, idx) => console.error(`[ModelList] Provider ${idx + 1} rejection:`, r.reason));
+        }
         
         // 3. Build final response in the correct format
         let finalResponse;
@@ -606,18 +754,13 @@ export async function handleModelListRequest(req, res, service, endpointType, CO
             };
         }
 
-        console.log(`[ModelList Response] Sending ${allModels.length} models to client`);
+        console.log(`[ModelList] ✓ Total models collected: ${allModels.length} from ${providersList.length} provider(s)`);
+        console.log(`[ModelList] Sending response to client\n`);
+        
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify(finalResponse));
     } catch (error) {
-        console.error('\n[Server] Error during model list processing:', error.stack);
-        if (providerPoolManager) {
-            // 如果是号池模式，并且请求处理失败，则标记当前使用的提供者为不健康
-            providerPoolManager.markProviderUnhealthy(toProvider, {
-                uuid: pooluuid
-            });
-        }
-    }
+        console.error('\n[Server] Error during model list processing:', error.stack);    }
 }
 
 /**
@@ -657,13 +800,15 @@ export async function handleContentGenerationRequest(req, res, service, endpoint
         throw new Error("Could not determine the model from the request.");
     }
     
-    // Remove prefix from model name if present (e.g., "[Warp] gpt-5" -> "gpt-5")
+    // 2. Determine the correct provider based on raw model name (with prefix)
+    const providerSelection = getProviderByModelName(rawModel, providerPoolManager, CONFIG.MODEL_PROVIDER);
+    const toProvider = providerSelection.providerType || CONFIG.MODEL_PROVIDER;
+    const selectedProviderUuid = providerSelection.providerConfig?.uuid;
+    
+    // Remove prefix from model name before sending to backend
     const model = removeModelPrefix(rawModel);
     console.log(`[Model Processing] Raw model: ${rawModel}, Clean model: ${model}`);
-    
-    // 2. Determine the correct provider based on model name
-    const toProvider = getProviderByModelName(model, providerPoolManager, CONFIG.MODEL_PROVIDER);
-    console.log(`[Provider Selection] Model: ${model}, Selected provider: ${toProvider}`);
+    console.log(`[Provider Selection] Model: ${model}, Selected provider: ${toProvider}${selectedProviderUuid ? ` (uuid: ${selectedProviderUuid})` : ''}`);
 
     // 3. Convert request body from client format to backend format, if necessary.
     let processedRequestBody = originalRequestBody;
@@ -686,7 +831,7 @@ export async function handleContentGenerationRequest(req, res, service, endpoint
     await logConversation('input', promptText, CONFIG.PROMPT_LOG_MODE, PROMPT_LOG_FILENAME);
     
     // 6. Get the correct service for the selected provider
-    const correctService = await getApiService({ ...CONFIG, MODEL_PROVIDER: toProvider }, providerPoolManager);
+    const correctService = await getApiService({ ...CONFIG, MODEL_PROVIDER: toProvider, uuid: selectedProviderUuid }, providerPoolManager);
     
     // 7. Call the appropriate stream or unary handler, passing the provider info.
     if (isStream) {
@@ -877,3 +1022,6 @@ export function getMD5Hash(obj) {
     const jsonString = JSON.stringify(obj);
     return crypto.createHash('md5').update(jsonString).digest('hex');
 }
+
+
+

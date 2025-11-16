@@ -1,7 +1,7 @@
 // 提供商管理功能模块
 
 import { providerStats, updateProviderStats } from './constants.js';
-import { showToast } from './utils.js';
+import { showToast, getProviderDisplayName } from './utils.js';
 
 // 保存初始服务器时间和运行时间
 let initialServerTime = null;
@@ -173,7 +173,7 @@ function renderProviders(providers) {
         providerDiv.innerHTML = `
             <div class="provider-header">
                 <div class="provider-name">
-                    <span class="provider-type-text">${providerType}</span>
+                    <span class="provider-type-text">${getProviderDisplayName(providerType)}</span>
                 </div>
                 <div class="provider-status ${statusClass}">
                     <i class="fas fa-${statusIcon}"></i>

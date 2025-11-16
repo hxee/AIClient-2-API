@@ -73,7 +73,10 @@ class FileUploadHandler {
             if (file) {
                 // 只有文件被实际选择后才显示加载状态并上传
                 this.setButtonLoading(button, true);
-                await this.uploadFile(file, targetInputId, button);
+                
+                // 获取当前提供商类型（从模态框或其他上下文）
+                const providerType = this.getCurrentProviderType(button);
+                await this.uploadFile(file, targetInputId, button, providerType);
             }
             
             // 清理临时文件输入元素
@@ -98,12 +101,34 @@ class FileUploadHandler {
     }
 
     /**
+     * 获取当前提供商类型
+     * @param {HTMLElement} button - 上传按钮元素
+     * @returns {string|null} - 提供商类型
+     */
+    getCurrentProviderType(button) {
+        // 尝试从模态框获取提供商类型
+        const modal = button.closest('.provider-modal');
+        if (modal) {
+            return modal.getAttribute('data-provider-type');
+        }
+        
+        // 尝试从主配置页面的选择框获取
+        const modelProvider = document.getElementById('modelProvider');
+        if (modelProvider) {
+            return modelProvider.value;
+        }
+        
+        return null;
+    }
+
+    /**
      * 上传文件到服务器
      * @param {File} file - 要上传的文件
      * @param {string} targetInputId - 目标输入框ID
      * @param {HTMLElement} button - 上传按钮
+     * @param {string|null} providerType - 提供商类型
      */
-    async uploadFile(file, targetInputId, button) {
+    async uploadFile(file, targetInputId, button, providerType = null) {
         try {
             // 验证文件类型
             if (!this.validateFileType(file)) {
@@ -124,13 +149,35 @@ class FileUploadHandler {
             formData.append('file', file);
             formData.append('provider', this.currentProvider);
             formData.append('targetInputId', targetInputId);
+            
+            // 如果有提供商类型，添加到表单数据中
+            if (providerType) {
+                formData.append('providerType', providerType);
+            }
 
             // 使用封装接口发送上传请求
             const result = await window.apiClient.upload('/upload-oauth-credentials', formData);
             
             // 成功上传，设置文件路径到输入框
             this.setFilePathToInput(targetInputId, result.filePath);
-            showToast('文件上传成功', 'success');
+            
+            // 根据是否自动添加到池显示不同的消息
+            if (result.addedToPool) {
+                showToast('文件上传成功并已自动添加到凭据池', 'success');
+                
+                // 刷新提供商列表
+                if (providerType && typeof window.loadProviders === 'function') {
+                    await window.loadProviders();
+                }
+                
+                // 如果在模态框中，刷新模态框内容
+                const modal = button.closest('.provider-modal');
+                if (modal && typeof window.refreshProviderConfigInModal === 'function') {
+                    await window.refreshProviderConfigInModal(providerType);
+                }
+            } else {
+                showToast('文件上传成功', 'success');
+            }
 
         } catch (error) {
             console.error('文件上传错误:', error);

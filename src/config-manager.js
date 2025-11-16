@@ -66,18 +66,7 @@ export async function initializeConfig(args = process.argv.slice(2), configFileP
             REQUIRED_API_KEY: "123456",
             SERVER_PORT: 3000,
             HOST: 'localhost',
-            MODEL_PROVIDER: MODEL_PROVIDER.GEMINI_CLI,
-            OPENAI_API_KEY: null,
-            OPENAI_BASE_URL: null,
-            CLAUDE_API_KEY: null,
-            CLAUDE_BASE_URL: null,
-            GEMINI_OAUTH_CREDS_BASE64: null,
-            GEMINI_OAUTH_CREDS_FILE_PATH: null,
-            KIRO_OAUTH_CREDS_BASE64: null,
-            KIRO_OAUTH_CREDS_FILE_PATH: null,
-            QWEN_OAUTH_CREDS_FILE_PATH: null,
-            PROJECT_ID: null,
-            SYSTEM_PROMPT_FILE_PATH: INPUT_SYSTEM_PROMPT_FILE, // Default value
+            SYSTEM_PROMPT_FILE_PATH: INPUT_SYSTEM_PROMPT_FILE,
             SYSTEM_PROMPT_MODE: 'append',
             PROMPT_LOG_BASE_NAME: "prompt_log",
             PROMPT_LOG_MODE: "none",
@@ -85,7 +74,7 @@ export async function initializeConfig(args = process.argv.slice(2), configFileP
             REQUEST_BASE_DELAY: 1000,
             CRON_NEAR_MINUTES: 15,
             CRON_REFRESH_TOKEN: false,
-            PROVIDER_POOLS_FILE_PATH: '' // 新增号池配置文件路径
+            PROVIDER_POOLS_FILE_PATH: 'provider_pools.json'
         };
         console.log('[Config] Using default configuration.');
     }
@@ -117,64 +106,6 @@ export async function initializeConfig(args = process.argv.slice(2), configFileP
                 i++;
             } else {
                 console.warn(`[Config Warning] --port flag requires a value.`);
-            }
-        } else if (args[i] === '--model-provider') {
-            if (i + 1 < args.length) {
-                currentConfig.MODEL_PROVIDER = args[i + 1];
-                i++;
-            } else {
-                console.warn(`[Config Warning] --model-provider flag requires a value.`);
-            }
-        } else if (args[i] === '--openai-api-key') {
-            if (i + 1 < args.length) {
-                currentConfig.OPENAI_API_KEY = args[i + 1];
-                i++;
-            } else {
-                console.warn(`[Config Warning] --openai-api-key flag requires a value.`);
-            }
-        } else if (args[i] === '--openai-base-url') {
-            if (i + 1 < args.length) {
-                currentConfig.OPENAI_BASE_URL = args[i + 1];
-                i++;
-            } else {
-                console.warn(`[Config Warning] --openai-base-url flag requires a value.`);
-            }
-        } else if (args[i] === '--claude-api-key') {
-            if (i + 1 < args.length) {
-                currentConfig.CLAUDE_API_KEY = args[i + 1];
-                i++;
-            } else {
-                console.warn(`[Config Warning] --claude-api-key flag requires a value.`);
-            }
-        } else if (args[i] === '--claude-base-url') {
-            if (i + 1 < args.length) {
-                currentConfig.CLAUDE_BASE_URL = args[i + 1];
-                i++;
-            } else {
-                console.warn(`[Config Warning] --claude-base-url flag requires a value.`);
-            }
-        }
-        // Gemini-specific arguments
-        else if (args[i] === '--gemini-oauth-creds-base64') {
-            if (i + 1 < args.length) {
-                currentConfig.GEMINI_OAUTH_CREDS_BASE64 = args[i + 1];
-                i++;
-            } else {
-                console.warn(`[Config Warning] --gemini-oauth-creds-base64 flag requires a value.`);
-            }
-        } else if (args[i] === '--gemini-oauth-creds-file') {
-            if (i + 1 < args.length) {
-                currentConfig.GEMINI_OAUTH_CREDS_FILE_PATH = args[i + 1];
-                i++;
-            } else {
-                console.warn(`[Config Warning] --gemini-oauth-creds-file flag requires a value.`);
-            }
-        } else if (args[i] === '--project-id') {
-            if (i + 1 < args.length) {
-                currentConfig.PROJECT_ID = args[i + 1];
-                i++;
-            } else {
-                console.warn(`[Config Warning] --project-id flag requires a value.`);
             }
         } else if (args[i] === '--system-prompt-file') {
             if (i + 1 < args.length) {
@@ -209,28 +140,7 @@ export async function initializeConfig(args = process.argv.slice(2), configFileP
             } else {
                 console.warn(`[Config Warning] --prompt-log-base-name flag requires a value.`);
             }
-        } else if (args[i] === '--kiro-oauth-creds-base64') {
-            if (i + 1 < args.length) {
-                currentConfig.KIRO_OAUTH_CREDS_BASE64 = args[i + 1];
-                i++;
-            } else {
-                console.warn(`[Config Warning] --kiro-oauth-creds-base64 flag requires a value.`);
-            }
-        } else if (args[i] === '--kiro-oauth-creds-file') {
-            if (i + 1 < args.length) {
-                currentConfig.KIRO_OAUTH_CREDS_FILE_PATH = args[i + 1];
-                i++;
-            } else {
-               console.warn(`[Config Warning] --kiro-oauth-creds-file flag requires a value.`);
-           }
-       } else if (args[i] === '--qwen-oauth-creds-file') {
-           if (i + 1 < args.length) {
-               currentConfig.QWEN_OAUTH_CREDS_FILE_PATH = args[i + 1];
-               i++;
-           } else {
-               console.warn(`[Config Warning] --qwen-oauth-creds-file flag requires a value.`);
-           }
-       } else if (args[i] === '--cron-near-minutes') {
+        } else if (args[i] === '--cron-near-minutes') {
             if (i + 1 < args.length) {
                 currentConfig.CRON_NEAR_MINUTES = parseInt(args[i + 1], 10);
                 i++;
@@ -254,8 +164,6 @@ export async function initializeConfig(args = process.argv.slice(2), configFileP
         }
     }
 
-    normalizeConfiguredProviders(currentConfig);
-
     if (!currentConfig.SYSTEM_PROMPT_FILE_PATH) {
         currentConfig.SYSTEM_PROMPT_FILE_PATH = INPUT_SYSTEM_PROMPT_FILE;
     }
@@ -267,12 +175,38 @@ export async function initializeConfig(args = process.argv.slice(2), configFileP
             const poolsData = await pfs.readFile(currentConfig.PROVIDER_POOLS_FILE_PATH, 'utf8');
             currentConfig.providerPools = JSON.parse(poolsData);
             console.log(`[Config] Loaded provider pools from ${currentConfig.PROVIDER_POOLS_FILE_PATH}`);
+            
+            // 自动检测可用的提供商类型
+            const availableProviders = [];
+            for (const [providerType, providers] of Object.entries(currentConfig.providerPools)) {
+                // 检查该类型是否有提供商配置（不管健康状态）
+                if (Array.isArray(providers) && providers.length > 0) {
+                    availableProviders.push(providerType);
+                    console.log(`[Config] Found provider type: ${providerType} with ${providers.length} credential(s)`);
+                }
+            }
+            
+            if (availableProviders.length > 0) {
+                currentConfig.DEFAULT_MODEL_PROVIDERS = availableProviders;
+                currentConfig.MODEL_PROVIDER = availableProviders[0]; // 设置第一个为主提供商
+                console.log(`[Config] Auto-detected available providers: ${availableProviders.join(', ')}`);
+                console.log(`[Config] Primary provider set to: ${currentConfig.MODEL_PROVIDER}`);
+            } else {
+                console.warn('[Config] No providers found in provider pools, using fallback');
+                currentConfig.DEFAULT_MODEL_PROVIDERS = [MODEL_PROVIDER.GEMINI_CLI];
+                currentConfig.MODEL_PROVIDER = MODEL_PROVIDER.GEMINI_CLI;
+            }
         } catch (error) {
             console.error(`[Config Error] Failed to load provider pools from ${currentConfig.PROVIDER_POOLS_FILE_PATH}: ${error.message}`);
             currentConfig.providerPools = {};
+            currentConfig.DEFAULT_MODEL_PROVIDERS = [];
+            currentConfig.MODEL_PROVIDER = null;
         }
     } else {
+        console.warn('[Config] PROVIDER_POOLS_FILE_PATH not configured, using fallback provider');
         currentConfig.providerPools = {};
+        currentConfig.DEFAULT_MODEL_PROVIDERS = [MODEL_PROVIDER.GEMINI_CLI];
+        currentConfig.MODEL_PROVIDER = MODEL_PROVIDER.GEMINI_CLI;
     }
 
     // Set PROMPT_LOG_FILENAME based on the determined config
@@ -326,39 +260,23 @@ export async function getSystemPromptFileContent(filePath) {
  * @param {Object} config - The configuration object
  */
 export function logProviderSpecificDetails(provider, config) {
-    switch (provider) {
-        case MODEL_PROVIDER.OPENAI_CUSTOM:
-            console.log(`  [openai-custom] API Key: ${config.OPENAI_API_KEY ? '******' : 'Not Set'}`);
-            console.log(`  [openai-custom] Base URL: ${config.OPENAI_BASE_URL || 'Default'}`);
-            break;
-        case MODEL_PROVIDER.CLAUDE_CUSTOM:
-            console.log(`  [claude-custom] API Key: ${config.CLAUDE_API_KEY ? '******' : 'Not Set'}`);
-            console.log(`  [claude-custom] Base URL: ${config.CLAUDE_BASE_URL || 'Default'}`);
-            break;
-        case MODEL_PROVIDER.GEMINI_CLI:
-            if (config.GEMINI_OAUTH_CREDS_FILE_PATH) {
-                console.log(`  [gemini-cli-oauth] OAuth Creds File Path: ${config.GEMINI_OAUTH_CREDS_FILE_PATH}`);
-            } else if (config.GEMINI_OAUTH_CREDS_BASE64) {
-                console.log(`  [gemini-cli-oauth] OAuth Creds Source: Provided via Base64 string`);
-            } else {
-                console.log(`  [gemini-cli-oauth] OAuth Creds: Default discovery`);
-            }
-            // console.log(`  [gemini-cli-oauth] Project ID: ${config.PROJECT_ID || 'Auto-discovered'}`);
-            break;
-        case MODEL_PROVIDER.KIRO_API:
-            if (config.KIRO_OAUTH_CREDS_FILE_PATH) {
-                console.log(`  [claude-kiro-oauth] OAuth Creds File Path: ${config.KIRO_OAUTH_CREDS_FILE_PATH}`);
-            } else if (config.KIRO_OAUTH_CREDS_BASE64) {
-                console.log(`  [claude-kiro-oauth] OAuth Creds Source: Provided via Base64 string`);
-            } else {
-                console.log(`  [claude-kiro-oauth] OAuth Creds: Default`);
-            }
-            break;
-        case MODEL_PROVIDER.QWEN_API:
-            console.log(`  [openai-qwen-oauth] OAuth Creds File Path: ${config.QWEN_OAUTH_CREDS_FILE_PATH || 'Default'}`);
-            break;
-        default:
-            console.log(`  [${provider}] Provider initialized.`);
+    // Provider credentials are now managed in provider_pools.json
+    // Log pool information for load balancing
+    if (config.providerPools && config.providerPools[provider]) {
+        const providers = config.providerPools[provider];
+        const healthyCount = providers.filter(p => p.isHealthy !== false && p.isDisabled !== true).length;
+        const totalCount = providers.length;
+        
+        console.log(`  [${provider}] Pool: ${totalCount} credential(s), ${healthyCount} available for load balancing`);
+        
+        // 显示每个凭据的状态
+        providers.forEach((p, index) => {
+            const status = p.isDisabled ? 'disabled' : (p.isHealthy === false ? 'unhealthy' : 'healthy');
+            const usage = p.usageCount || 0;
+            console.log(`    - Credential #${index + 1} [${p.uuid.substring(0, 8)}...]: ${status}, used ${usage} times`);
+        });
+    } else {
+        console.log(`  [${provider}] No credentials configured in pool`);
     }
 }
 

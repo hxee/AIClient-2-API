@@ -63,10 +63,24 @@ function getFieldLabel(key) {
         'PROJECT_ID': '项目ID',
         'GEMINI_OAUTH_CREDS_FILE_PATH': 'OAuth凭据文件路径',
         'KIRO_OAUTH_CREDS_FILE_PATH': 'OAuth凭据文件路径',
-        'QWEN_OAUTH_CREDS_FILE_PATH': 'OAuth凭据文件路径'
+        'QWEN_OAUTH_CREDS_FILE_PATH': 'OAuth凭据文件路径',
+        'vendorName': '供应商名称'
     };
     
     return labelMap[key] || key;
+}
+
+const PROVIDER_DISPLAY_NAMES = {
+    'gemini-cli-oauth': 'Gemini CLI',
+    'openai-qwen-oauth': 'Qwen CLI',
+    'claude-kiro-oauth': 'Kiro CLI',
+    'openai-custom': 'OpenAI Chat',
+    'openaiResponses-custom': 'OpenAI Responses',
+    'claude-custom': 'Claude'
+};
+
+function getProviderDisplayName(providerType) {
+    return PROVIDER_DISPLAY_NAMES[providerType] || providerType;
 }
 
 /**
@@ -178,5 +192,6 @@ export {
     showToast,
     getFieldLabel,
     getProviderTypeFields,
-    getProviderStats
+    getProviderStats,
+    getProviderDisplayName
 };

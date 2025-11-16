@@ -4,7 +4,6 @@ import { OpenAIApiService } from './openai/openai-core.js'; // 导入OpenAIApiSe
 import { ClaudeApiService } from './claude/claude-core.js'; // 导入ClaudeApiService
 import { KiroApiService } from './claude/claude-kiro.js'; // 导入KiroApiService
 import { QwenApiService } from './openai/qwen-core.js'; // 导入QwenApiService
-import { WarpApiService } from './warp/warp-core.js'; // 导入WarpApiService
 import { MODEL_PROVIDER } from './common.js'; // 导入 MODEL_PROVIDER
 
 // 定义AI服务适配器接口
@@ -272,27 +271,27 @@ export class QwenApiServiceAdapter extends ApiServiceAdapter {
     }
 }
 
-// Warp API 服务适配器
+// Warp API 服务适配器 (已废弃)
 export class WarpApiServiceAdapter extends ApiServiceAdapter {
     constructor(config) {
         super();
-        this.warpApiService = new WarpApiService(config);
+        throw new Error('Warp API 功能已被移除。请使用其他支持的提供商。');
     }
 
     async generateContent(model, requestBody) {
-        return this.warpApiService.generateContent(model, requestBody);
+        throw new Error('Warp API 功能已被移除。');
     }
 
     async *generateContentStream(model, requestBody) {
-        yield* this.warpApiService.generateContentStream(model, requestBody);
+        throw new Error('Warp API 功能已被移除。');
     }
 
     async listModels() {
-        return this.warpApiService.listModels();
+        throw new Error('Warp API 功能已被移除。');
     }
 
     async refreshToken() {
-        return this.warpApiService.refreshToken();
+        throw new Error('Warp API 功能已被移除。');
     }
 }
 
@@ -325,8 +324,7 @@ export function getServiceAdapter(config) {
                 serviceInstances[providerKey] = new QwenApiServiceAdapter(config);
                 break;
             case MODEL_PROVIDER.WARP_API:
-                serviceInstances[providerKey] = new WarpApiServiceAdapter(config);
-                break;
+                throw new Error('Warp API 功能已被移除。请使用其他支持的提供商。');
             default:
                 throw new Error(`Unsupported model provider: ${provider}`);
         }

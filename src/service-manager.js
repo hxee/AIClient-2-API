@@ -59,20 +59,31 @@ export async function initApiService(config) {
  * @returns {Promise<Object>} The API service adapter
  */
 export async function getApiService(config) {
+    console.log(`[Service Manager] getApiService called with MODEL_PROVIDER: ${config.MODEL_PROVIDER}`);
+    console.log(`[Service Manager] Provider pools available: ${config.providerPools ? Object.keys(config.providerPools).join(', ') : 'none'}`);
+    
     let serviceConfig = config;
     if (providerPoolManager && config.providerPools && config.providerPools[config.MODEL_PROVIDER]) {
+        console.log(`[Service Manager] Found pool for ${config.MODEL_PROVIDER}, selecting from pool...`);
         // 如果有号池管理器，并且当前模型提供者类型有对应的号池，则从号池中选择一个提供者配置
-        const selectedProviderConfig = providerPoolManager.selectProvider(config.MODEL_PROVIDER);
+        const selectedProviderConfig = providerPoolManager.selectProvider(config.MODEL_PROVIDER, config.uuid);
         if (selectedProviderConfig) {
             // 合并选中的提供者配置到当前请求的 config 中
             serviceConfig = deepmerge(config, selectedProviderConfig);
             delete serviceConfig.providerPools; // 移除 providerPools 属性
             config.uuid = serviceConfig.uuid;
-            console.log(`[API Service] Using pooled configuration for ${config.MODEL_PROVIDER}: ${serviceConfig.uuid}`);
+            console.log(`[Service Manager] ✓ Using pooled configuration for ${config.MODEL_PROVIDER}`);
+            console.log(`[Service Manager]   - UUID: ${serviceConfig.uuid}`);
+            console.log(`[Service Manager]   - Has API Key: ${!!(serviceConfig.OPENAI_API_KEY || serviceConfig.CLAUDE_API_KEY)}`);
+            console.log(`[Service Manager]   - Has OAuth: ${!!(serviceConfig.GEMINI_OAUTH_CREDS_FILE_PATH || serviceConfig.KIRO_OAUTH_CREDS_FILE_PATH || serviceConfig.QWEN_OAUTH_CREDS_FILE_PATH)}`);
         } else {
-            console.warn(`[API Service] No healthy provider found in pool for ${config.MODEL_PROVIDER}. Falling back to main config.`);
+            console.warn(`[Service Manager] ✗ No healthy provider found in pool for ${config.MODEL_PROVIDER}. Falling back to main config.`);
         }
+    } else {
+        console.log(`[Service Manager] No pool configured for ${config.MODEL_PROVIDER}, using default config`);
     }
+    
+    console.log(`[Service Manager] Final service config MODEL_PROVIDER: ${serviceConfig.MODEL_PROVIDER}`);
     return getServiceAdapter(serviceConfig);
 }
 

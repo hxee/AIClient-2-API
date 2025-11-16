@@ -48,31 +48,55 @@ export function createRequestHandler(config, providerPoolManager) {
         const uiHandled = await handleUIApiRequests(method, path, req, res, currentConfig, providerPoolManager);
         if (uiHandled) return;
 
-        console.log(`\n${new Date().toLocaleString()}`);
-        console.log(`[Server] Received request: ${req.method} http://${req.headers.host}${req.url}`);
+        console.log(`\n${'='.repeat(80)}`);
+        console.log(`[Server] ${new Date().toLocaleString()}`);
+        console.log(`[Request] ${req.method} http://${req.headers.host}${req.url}`);
+        console.log(`[Request] Original Path: ${path}`);
+        console.log(`[Request] Headers:`, JSON.stringify({
+            'authorization': req.headers['authorization'] ? '[REDACTED]' : undefined,
+            'model-provider': req.headers['model-provider'],
+            'content-type': req.headers['content-type'],
+            'user-agent': req.headers['user-agent']
+        }, null, 2));
+        
         // Handle API requests
         // Allow overriding MODEL_PROVIDER via request header
         const modelProviderHeader = req.headers['model-provider'];
         if (modelProviderHeader) {
             currentConfig.MODEL_PROVIDER = modelProviderHeader;
-            console.log(`[Config] MODEL_PROVIDER overridden by header to: ${currentConfig.MODEL_PROVIDER}`);
+            console.log(`[Router] MODEL_PROVIDER overridden by header to: ${currentConfig.MODEL_PROVIDER}`);
+        }
+
+        // Allow selecting a specific provider UUID via header or query param
+        const providerUuidFromHeader = req.headers['provider-uuid'] || req.headers['provider_uuid'];
+        const providerUuidFromQuery = requestUrl.searchParams.get('provider_uuid') || requestUrl.searchParams.get('uuid');
+        if (providerUuidFromHeader || providerUuidFromQuery) {
+            currentConfig.uuid = (providerUuidFromHeader || providerUuidFromQuery).trim();
+            console.log(`[Router] Preferred provider UUID set to: ${currentConfig.uuid}`);
         }
           
         // Check if the first path segment matches a MODEL_PROVIDER and switch if it does
         const pathSegments = path.split('/').filter(segment => segment.length > 0);
+        console.log(`[Router] Path segments:`, pathSegments);
+        
         if (pathSegments.length > 0) {
             const firstSegment = pathSegments[0];
             const isValidProvider = Object.values(MODEL_PROVIDER).includes(firstSegment);
+            console.log(`[Router] First segment: "${firstSegment}", Is valid provider: ${isValidProvider}`);
+            
             if (firstSegment && isValidProvider) {
                 currentConfig.MODEL_PROVIDER = firstSegment;
-                console.log(`[Config] MODEL_PROVIDER overridden by path segment to: ${currentConfig.MODEL_PROVIDER}`);
+                console.log(`[Router] ✓ MODEL_PROVIDER set by path to: ${currentConfig.MODEL_PROVIDER}`);
                 pathSegments.shift();
                 path = '/' + pathSegments.join('/');
                 requestUrl.pathname = path;
+                console.log(`[Router] Normalized path: ${path}`);
             } else if (firstSegment && !isValidProvider) {
-                console.log(`[Config] Ignoring invalid MODEL_PROVIDER in path segment: ${firstSegment}`);
+                console.log(`[Router] ✗ Not a valid MODEL_PROVIDER, keeping default: ${currentConfig.MODEL_PROVIDER}`);
             }
         }
+        
+        console.log(`[Router] Final MODEL_PROVIDER: ${currentConfig.MODEL_PROVIDER}`);
 
         // Normalize common Ollama path aliases (e.g., '/ollama/api/tags' -> '/api/tags')
         if (path.startsWith('/ollama/')) {
@@ -103,8 +127,11 @@ export function createRequestHandler(config, providerPoolManager) {
         // 获取或选择 API Service 实例
         let apiService;
         try {
+            console.log(`[Service] Getting API service for provider: ${currentConfig.MODEL_PROVIDER}`);
             apiService = await getApiService(currentConfig);
+            console.log(`[Service] ✓ API service obtained successfully`);
         } catch (error) {
+            console.error(`[Service] ✗ Failed to get API service: ${error.message}`);
             handleError(res, { statusCode: 500, message: `Failed to get API service: ${error.message}` });
             const poolManager = getProviderPoolManager();
             if (poolManager) {
