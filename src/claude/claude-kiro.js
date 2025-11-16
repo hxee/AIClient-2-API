@@ -4,6 +4,7 @@ import { promises as fs } from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 import * as crypto from 'crypto';
+import { getProviderModels } from '../model-config-manager.js';
 
 const KIRO_CONSTANTS = {
     REFRESH_URL: 'https://prod.{{region}}.auth.desktop.kiro.dev/refreshToken',
@@ -20,7 +21,7 @@ const KIRO_CONSTANTS = {
     ORIGIN_AI_EDITOR: 'AI_EDITOR',
 };
 
-const MODEL_MAPPING = {
+const DEFAULT_MODEL_MAPPING = {
     "claude-sonnet-4-5": "CLAUDE_SONNET_4_5_20250929_V1_0",
     "claude-sonnet-4-5-20250929": "CLAUDE_SONNET_4_5_20250929_V1_0",
     "claude-sonnet-4-20250514": "CLAUDE_SONNET_4_20250514_V1_0",
@@ -28,6 +29,8 @@ const MODEL_MAPPING = {
     "amazonq-claude-sonnet-4-20250514": "CLAUDE_SONNET_4_20250514_V1_0",
     "amazonq-claude-3-7-sonnet-20250219": "CLAUDE_3_7_SONNET_20250219_V1_0"
 };
+
+let MODEL_MAPPING = { ...DEFAULT_MODEL_MAPPING };
 
 const KIRO_AUTH_TOKEN_FILE = "kiro-auth-token.json";
 
@@ -266,6 +269,25 @@ export class KiroApiService {
         if (this.isInitialized) return;
         console.log('[Kiro] Initializing Kiro API Service...');
         await this.initializeAuth();
+        
+        // Load model mappings from models.config
+        try {
+            const providerModels = await getProviderModels('claude-kiro-oauth');
+            if (providerModels && Object.keys(providerModels).length > 0) {
+                // Build mapping from the config values
+                const newMapping = {};
+                for (const [key, value] of Object.entries(providerModels)) {
+                    newMapping[value] = DEFAULT_MODEL_MAPPING[value] || value;
+                    newMapping[key] = DEFAULT_MODEL_MAPPING[value] || value;
+                }
+                MODEL_MAPPING = { ...DEFAULT_MODEL_MAPPING, ...newMapping };
+                console.log(`[Kiro] Loaded models from models.config`);
+            }
+        } catch (error) {
+            console.warn(`[Kiro] Failed to load models from models.config, using defaults: ${error.message}`);
+            MODEL_MAPPING = { ...DEFAULT_MODEL_MAPPING };
+        }
+        
         const macSha256 = await getMacAddressSha256();
         const axiosConfig = {
             timeout: KIRO_CONSTANTS.AXIOS_TIMEOUT,

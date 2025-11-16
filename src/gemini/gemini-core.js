@@ -5,6 +5,7 @@ import * as path from 'path';
 import * as os from 'os';
 import * as readline from 'readline';
 import { API_ACTIONS, formatExpiryTime } from '../common.js';
+import { getProviderModels } from '../model-config-manager.js';
 
 // --- Constants ---
 const AUTH_REDIRECT_PORT = 8085;
@@ -14,8 +15,11 @@ const CODE_ASSIST_ENDPOINT = 'https://cloudcode-pa.googleapis.com';
 const CODE_ASSIST_API_VERSION = 'v1internal';
 const OAUTH_CLIENT_ID = '681255809395-oo8ft2oprdrnp9e3aqf6av3hmdib135j.apps.googleusercontent.com';
 const OAUTH_CLIENT_SECRET = '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';
-const GEMINI_MODELS = ['gemini-2.5-flash', 'gemini-2.5-flash-lite', 'gemini-2.5-pro' , 'gemini-2.5-pro-preview-06-05', 'gemini-2.5-flash-preview-09-2025', 'gemini-3-pro-preview-11-2025'];
-const ANTI_TRUNCATION_MODELS = GEMINI_MODELS.map(model => `anti-${model}`);
+
+// Default models for fallback (will be overridden by models.config)
+const DEFAULT_GEMINI_MODELS = ['gemini-2.5-flash', 'gemini-2.5-flash-lite', 'gemini-2.5-pro'];
+let GEMINI_MODELS = [...DEFAULT_GEMINI_MODELS];
+let ANTI_TRUNCATION_MODELS = GEMINI_MODELS.map(model => `anti-${model}`);
 
 function is_anti_truncation_model(model) {
     return ANTI_TRUNCATION_MODELS.some(antiModel => model.includes(antiModel));
@@ -190,12 +194,27 @@ export class GeminiApiService {
         if (this.isInitialized) return;
         console.log('[Gemini] Initializing Gemini API Service...');
         await this.initializeAuth();
+        
+        // Load models from models.config
+        try {
+            const providerModels = await getProviderModels('gemini-cli-oauth');
+            if (providerModels && Object.keys(providerModels).length > 0) {
+                GEMINI_MODELS = Object.values(providerModels);
+                ANTI_TRUNCATION_MODELS = GEMINI_MODELS.map(model => `anti-${model}`);
+                console.log(`[Gemini] Loaded ${GEMINI_MODELS.length} models from models.config`);
+            }
+        } catch (error) {
+            console.warn(`[Gemini] Failed to load models from models.config, using defaults: ${error.message}`);
+            GEMINI_MODELS = [...DEFAULT_GEMINI_MODELS];
+            ANTI_TRUNCATION_MODELS = GEMINI_MODELS.map(model => `anti-${model}`);
+        }
+        
         if (!this.projectId) {
             this.projectId = await this.discoverProjectAndModels();
         } else {
             console.log(`[Gemini] Using provided Project ID: ${this.projectId}`);
             this.availableModels = GEMINI_MODELS;
-            console.log(`[Gemini] Using fixed models: [${this.availableModels.join(', ')}]`);
+            console.log(`[Gemini] Using models: [${this.availableModels.join(', ')}]`);
         }
         if (this.projectId === 'default') {
             throw new Error("Error: 'default' is not a valid project ID. Please provide a valid Google Cloud Project ID using the --project-id argument.");
@@ -312,7 +331,7 @@ export class GeminiApiService {
 
         console.log('[Gemini] Discovering Project ID...');
         this.availableModels = GEMINI_MODELS;
-        console.log(`[Gemini] Using fixed models: [${this.availableModels.join(', ')}]`);
+        console.log(`[Gemini] Using models from configuration: [${this.availableModels.join(', ')}]`);
         try {
             const initialProjectId = ""
             // Prepare client metadata

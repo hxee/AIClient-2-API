@@ -1,0 +1,58 @@
+{
+  "models": {
+    "A": {
+      "name": "Model A",
+      "description": "Fast and efficient model for general purpose tasks"
+    },
+    "B": {
+      "name": "Model B",
+      "description": "Balanced model for diverse use cases"
+    },
+    "C": {
+      "name": "Model C",
+      "description": "Advanced model for complex reasoning"
+    },
+    "D": {
+      "name": "Model D",
+      "description": "Specialized model for extended context"
+    }
+  },
+  "providers": {
+    "gemini-cli-oauth": {
+      "A": "gemini-2.5-flash-lite",
+      "B": "gemini-2.5-flash",
+      "C": "gemini-2.5-pro",
+      "D": "gemini-2.5-pro-preview-06-05"
+    },
+    "openai-custom": {
+      "A": "gpt-4o-mini",
+      "B": "gpt-4-turbo",
+      "C": "gpt-4o",
+      "D": "gpt-4o"
+    },
+    "openaiResponses-custom": {
+      "A": "gpt-4o-mini",
+      "B": "gpt-4-turbo",
+      "C": "gpt-4o",
+      "D": "gpt-4o"
+    },
+    "claude-custom": {
+      "A": "claude-3-5-haiku-20241022",
+      "B": "claude-3-5-sonnet-20241022",
+      "C": "claude-3-opus-20250219",
+      "D": "claude-3-opus-20250219"
+    },
+    "openai-qwen-oauth": {
+      "A": "qwen3-coder-flash",
+      "B": "qwen3-coder-plus",
+      "C": "qwen3-coder-plus",
+      "D": "qwen3-coder-plus"
+    },
+    "claude-kiro-oauth": {
+      "A": "claude-sonnet-4-5-20250929",
+      "B": "claude-sonnet-4-20250514",
+      "C": "claude-3-7-sonnet-20250219",
+      "D": "claude-3-7-sonnet-20250219"
+    }
+  }
+}

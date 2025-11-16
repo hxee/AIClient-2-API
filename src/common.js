@@ -6,6 +6,7 @@ import { ApiServiceAdapter } from './adapter.js'; // Import ApiServiceAdapter
 import { convertData, getOpenAIStreamChunkStop, getOpenAIResponsesStreamChunkBegin, getOpenAIResponsesStreamChunkEnd } from './convert.js';
 import { ProviderStrategyFactory } from './provider-strategies.js';
 import { getApiService } from './service-manager.js';
+import { resolveModelId } from './model-config-manager.js';
 
 export const API_ACTIONS = {
     GENERATE_CONTENT: 'generateContent',
@@ -806,8 +807,20 @@ export async function handleContentGenerationRequest(req, res, service, endpoint
     const selectedProviderUuid = providerSelection.providerConfig?.uuid;
     
     // Remove prefix from model name before sending to backend
-    const model = removeModelPrefix(rawModel);
+    let model = removeModelPrefix(rawModel);
     console.log(`[Model Processing] Raw model: ${rawModel}, Clean model: ${model}`);
+    
+    // Resolve generic model IDs (A, B, C, D) to actual provider models
+    try {
+        const resolvedModel = await resolveModelId(model, toProvider);
+        if (resolvedModel !== model) {
+            console.log(`[Model Resolution] Resolved ${model} to ${resolvedModel} for provider ${toProvider}`);
+            model = resolvedModel;
+        }
+    } catch (error) {
+        console.debug(`[Model Resolution] Could not resolve model from config: ${error.message}, using as-is`);
+    }
+    
     console.log(`[Provider Selection] Model: ${model}, Selected provider: ${toProvider}${selectedProviderUuid ? ` (uuid: ${selectedProviderUuid})` : ''}`);
 
     // 3. Convert request body from client format to backend format, if necessary.

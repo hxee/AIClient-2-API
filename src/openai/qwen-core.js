@@ -6,14 +6,18 @@ import * as os from 'os';
 import open from 'open';
 import { EventEmitter } from 'events';
 import { randomUUID } from 'node:crypto';
+import { getProviderModels } from '../model-config-manager.js';
 
 // --- Constants ---
 const QWEN_DIR = '.qwen';
 const QWEN_CREDENTIAL_FILENAME = 'oauth_creds.json';
-const QWEN_MODEL_LIST = [
+
+// Default models for fallback (will be overridden by models.config)
+const DEFAULT_QWEN_MODEL_LIST = [
     { id: 'qwen3-coder-plus', name: 'Qwen3 Coder Plus' },
     { id: 'qwen3-coder-flash', name: 'Qwen3 Coder Flash' },
 ];
+let QWEN_MODEL_LIST = [...DEFAULT_QWEN_MODEL_LIST];
 
 const TOKEN_REFRESH_BUFFER_MS = 30 * 1000;
 const LOCK_TIMEOUT_MS = 10000;
@@ -183,6 +187,21 @@ export class QwenApiService {
         if (this.isInitialized) return;
         console.log('[Qwen] Initializing Qwen API Service...');
         await this._initializeAuth();
+        
+        // Load models from models.config
+        try {
+            const providerModels = await getProviderModels('openai-qwen-oauth');
+            if (providerModels && Object.keys(providerModels).length > 0) {
+                QWEN_MODEL_LIST = Object.values(providerModels).map((id, index) => ({
+                    id: id,
+                    name: id.replace(/-/g, ' ').split(' ').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')
+                }));
+                console.log(`[Qwen] Loaded ${QWEN_MODEL_LIST.length} models from models.config`);
+            }
+        } catch (error) {
+            console.warn(`[Qwen] Failed to load models from models.config, using defaults: ${error.message}`);
+            QWEN_MODEL_LIST = [...DEFAULT_QWEN_MODEL_LIST];
+        }
         
         const axiosConfig = {
             baseURL: DEFAULT_QWEN_BASE_URL,
