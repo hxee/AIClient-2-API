@@ -84,7 +84,10 @@ export function createRequestHandler(config, providerPoolManager) {
             const isValidProvider = Object.values(MODEL_PROVIDER).includes(firstSegment);
             console.log(`[Router] First segment: "${firstSegment}", Is valid provider: ${isValidProvider}`);
             
-            if (firstSegment && isValidProvider) {
+            // Fix: treat v1 (and v1beta) as not a provider for routing purposes
+            if (firstSegment === 'v1' || firstSegment === 'v1beta') {
+                console.log(`[Router] Special segment "${firstSegment}" treated as non-provider`);
+            } else if (firstSegment && isValidProvider) {
                 currentConfig.MODEL_PROVIDER = firstSegment;
                 console.log(`[Router] ✓ MODEL_PROVIDER set by path to: ${currentConfig.MODEL_PROVIDER}`);
                 pathSegments.shift();

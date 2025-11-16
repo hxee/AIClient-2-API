@@ -421,14 +421,14 @@ export class ProviderPoolManager {
      */
     async _saveProviderPoolsToJson(providerTypeToUpdate) {
         try {
-            const filePath = this.globalConfig.PROVIDER_POOLS_FILE_PATH || 'provider_pools.json';
+            const filePath = this.globalConfig.PROVIDER_FILE_PATH || 'provider.json';
             let currentPools = {};
             try {
                 const fileContent = await fs.promises.readFile(filePath, 'utf8');
                 currentPools = JSON.parse(fileContent);
             } catch (readError) {
                 if (readError.code === 'ENOENT') {
-                    console.log('[ProviderPoolManager] provider_pools.json does not exist, creating new file.');
+                    console.log('[ProviderPoolManager] provider.json does not exist, creating new file.');
                 } else {
                     throw readError;
                 }
@@ -450,9 +450,9 @@ export class ProviderPoolManager {
             }
             
             await fs.promises.writeFile(filePath, JSON.stringify(currentPools, null, 2), 'utf8');
-            console.log(`[ProviderPoolManager] provider_pools.json for ${providerTypeToUpdate} updated successfully.`);
+            console.log(`[ProviderPoolManager] provider.json for ${providerTypeToUpdate} updated successfully.`);
         } catch (error) {
-            console.error('[ProviderPoolManager] Failed to write provider_pools.json:', error);
+            console.error('[ProviderPoolManager] Failed to write provider.json:', error);
         }
     }
 

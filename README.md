@@ -35,8 +35,8 @@
 > - **2025.10.18** - Kiro 开放注册，新用户赠送 500 额度，已完整支持 Claude Sonnet 4.5
 > - **2025.09.01** - 集成 Qwen Code CLI，新增 `qwen3-coder-plus` 模型支持
 > - **2025.08.29** - 发布账号池管理功能，支持多账号轮询、智能故障转移和自动降级策略
->   - 配置方式：在 config.json 中添加 `PROVIDER_POOLS_FILE_PATH` 参数
->   - 参考配置：[provider_pools.json](./provider_pools.json.example)
+>   - 配置方式：在 config.json 中添加 `PROVIDER_FILE_PATH` 参数
+>   - 参考配置：[provider.json](./provider.json.example)
 
 ---
 
@@ -254,8 +254,8 @@ install-and-run.bat
 4. **重要提示**：Kiro 服务使用政策已更新，请访问官方网站查看最新使用限制和条款
 
 #### 账号池管理配置
-1. **创建号池配置文件**：参考 [provider_pools.json.example](./provider_pools.json.example) 创建配置文件
-2. **配置号池参数**：在 config.json 中设置 `PROVIDER_POOLS_FILE_PATH` 指向号池配置文件
+1. **创建号池配置文件**：参考 [provider.json.example](./provider.json.example) 创建配置文件
+2. **配置号池参数**：在 config.json 中设置 `PROVIDER_FILE_PATH` 指向号池配置文件
 3. **启动参数配置**：使用 `--provider-pools-file <path>` 参数指定号池配置文件路径
 4. **健康检查**：系统会定期自动执行健康检查，移除不健康的提供商
 
@@ -432,7 +432,7 @@ node src/api-server.js --log-prompts console
 node src/api-server.js --log-prompts file --prompt-log-base-name my-logs
 
 # 配置号池
-node src/api-server.js --provider-pools-file ./provider_pools.json
+node src/api-server.js --provider-pools-file ./provider.json
 
 # 完整示例
 node src/api-server.js \
@@ -446,7 +446,7 @@ node src/api-server.js \
   --system-prompt-mode overwrite \
   --log-prompts file \
   --prompt-log-base-name api-logs \
-  --provider-pools-file ./provider_pools.json
+  --provider-pools-file ./provider.json
 ```
 
 ---

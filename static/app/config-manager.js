@@ -84,7 +84,7 @@ async function loadConfiguration() {
         if (requestBaseDelayEl) requestBaseDelayEl.value = data.REQUEST_BASE_DELAY || 1000;
         if (cronNearMinutesEl) cronNearMinutesEl.value = data.CRON_NEAR_MINUTES || 1;
         if (cronRefreshTokenEl) cronRefreshTokenEl.checked = data.CRON_REFRESH_TOKEN || false;
-        if (providerPoolsFilePathEl) providerPoolsFilePathEl.value = data.PROVIDER_POOLS_FILE_PATH || '';
+        if (providerPoolsFilePathEl) providerPoolsFilePathEl.value = data.PROVIDER_FILE_PATH || '';
 
         // 触发提供商配置显示
         handleProviderChange();
@@ -106,7 +106,7 @@ async function loadConfiguration() {
         }
         
         // 检查并设置提供商池菜单显示状态
-        const providerPoolsFilePath = data.PROVIDER_POOLS_FILE_PATH;
+        const providerPoolsFilePath = data.PROVIDER_FILE_PATH;
         const providersMenuItem = document.querySelector('.nav-item[data-section="providers"]');
         if (providerPoolsFilePath && providerPoolsFilePath.trim() !== '') {
             if (providersMenuItem) providersMenuItem.style.display = 'flex';
@@ -187,7 +187,7 @@ async function saveConfiguration() {
     config.REQUEST_BASE_DELAY = parseInt(document.getElementById('requestBaseDelay')?.value || 1000);
     config.CRON_NEAR_MINUTES = parseInt(document.getElementById('cronNearMinutes')?.value || 1);
     config.CRON_REFRESH_TOKEN = document.getElementById('cronRefreshToken')?.checked || false;
-    config.PROVIDER_POOLS_FILE_PATH = document.getElementById('providerPoolsFilePath')?.value || '';
+    config.PROVIDER_FILE_PATH = document.getElementById('providerPoolsFilePath')?.value || '';
 
     try {
         await window.apiClient.post('/config', config);

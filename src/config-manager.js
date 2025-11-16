@@ -74,7 +74,7 @@ export async function initializeConfig(args = process.argv.slice(2), configFileP
             REQUEST_BASE_DELAY: 1000,
             CRON_NEAR_MINUTES: 15,
             CRON_REFRESH_TOKEN: false,
-            PROVIDER_POOLS_FILE_PATH: 'provider_pools.json'
+            PROVIDER_FILE_PATH: 'provider.json'
         };
         console.log('[Config] Using default configuration.');
     }
@@ -156,7 +156,7 @@ export async function initializeConfig(args = process.argv.slice(2), configFileP
             }
         } else if (args[i] === '--provider-pools-file') {
             if (i + 1 < args.length) {
-                currentConfig.PROVIDER_POOLS_FILE_PATH = args[i + 1];
+                currentConfig.PROVIDER_FILE_PATH = args[i + 1];
                 i++;
             } else {
                 console.warn(`[Config Warning] --provider-pools-file flag requires a value.`);
@@ -170,11 +170,11 @@ export async function initializeConfig(args = process.argv.slice(2), configFileP
     currentConfig.SYSTEM_PROMPT_CONTENT = await getSystemPromptFileContent(currentConfig.SYSTEM_PROMPT_FILE_PATH);
 
     // 加载号池配置
-    if (currentConfig.PROVIDER_POOLS_FILE_PATH) {
+    if (currentConfig.PROVIDER_FILE_PATH) {
         try {
-            const poolsData = await pfs.readFile(currentConfig.PROVIDER_POOLS_FILE_PATH, 'utf8');
+            const poolsData = await pfs.readFile(currentConfig.PROVIDER_FILE_PATH, 'utf8');
             currentConfig.providerPools = JSON.parse(poolsData);
-            console.log(`[Config] Loaded provider pools from ${currentConfig.PROVIDER_POOLS_FILE_PATH}`);
+            console.log(`[Config] Loaded provider pools from ${currentConfig.PROVIDER_FILE_PATH}`);
             
             // 自动检测可用的提供商类型
             const availableProviders = [];
@@ -197,13 +197,13 @@ export async function initializeConfig(args = process.argv.slice(2), configFileP
                 currentConfig.MODEL_PROVIDER = MODEL_PROVIDER.GEMINI_CLI;
             }
         } catch (error) {
-            console.error(`[Config Error] Failed to load provider pools from ${currentConfig.PROVIDER_POOLS_FILE_PATH}: ${error.message}`);
+            console.error(`[Config Error] Failed to load provider pools from ${currentConfig.PROVIDER_FILE_PATH}: ${error.message}`);
             currentConfig.providerPools = {};
             currentConfig.DEFAULT_MODEL_PROVIDERS = [];
             currentConfig.MODEL_PROVIDER = null;
         }
     } else {
-        console.warn('[Config] PROVIDER_POOLS_FILE_PATH not configured, using fallback provider');
+        console.warn('[Config] PROVIDER_FILE_PATH not configured, using fallback provider');
         currentConfig.providerPools = {};
         currentConfig.DEFAULT_MODEL_PROVIDERS = [MODEL_PROVIDER.GEMINI_CLI];
         currentConfig.MODEL_PROVIDER = MODEL_PROVIDER.GEMINI_CLI;
@@ -260,7 +260,7 @@ export async function getSystemPromptFileContent(filePath) {
  * @param {Object} config - The configuration object
  */
 export function logProviderSpecificDetails(provider, config) {
-    // Provider credentials are now managed in provider_pools.json
+    // Provider credentials are now managed in provider.json
     // Log pool information for load balancing
     if (config.providerPools && config.providerPools[provider]) {
         const providers = config.providerPools[provider];

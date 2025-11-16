@@ -307,7 +307,7 @@ export async function handleUIApiRequests(method, pathParam, req, res, currentCo
         }
     }
 
-    // 文件上传API - 上传后自动添加到 provider_pools.json
+    // 文件上传API - 上传后自动添加到 provider.json
     if (method === 'POST' && pathParam === '/api/upload-oauth-credentials') {
         const uploadMiddleware = upload.single('file');
         
@@ -348,7 +348,7 @@ export async function handleUIApiRequests(method, pathParam, req, res, currentCo
                 
                 const relativePath = path.relative(process.cwd(), targetFilePath);
 
-                // 自动添加到 provider_pools.json（如果提供了 providerType）
+                // 自动添加到 provider.json（如果提供了 providerType）
                 let addedToPool = false;
                 let providerConfig = null;
                 
@@ -387,7 +387,7 @@ export async function handleUIApiRequests(method, pathParam, req, res, currentCo
                                 providerConfig.QWEN_OAUTH_CREDS_FILE_PATH = relativePath;
                                 break;
                             default:
-                                console.warn(`[UI API] 未知的提供商类型: ${providerType}，文件已上传但未自动添加到 provider_pools.json`);
+                                console.warn(`[UI API] 未知的提供商类型: ${providerType}，文件已上传但未自动添加到 provider.json`);
                         }
 
                         // 只有在识别的提供商类型时才添加到池中
@@ -395,7 +395,7 @@ export async function handleUIApiRequests(method, pathParam, req, res, currentCo
                             providerConfig.KIRO_OAUTH_CREDS_FILE_PATH ||
                             providerConfig.QWEN_OAUTH_CREDS_FILE_PATH) {
                             
-                            const filePath = currentConfig.PROVIDER_POOLS_FILE_PATH || 'provider_pools.json';
+                            const filePath = currentConfig.PROVIDER_FILE_PATH || 'provider.json';
                             let providerPools = {};
                             
                             // 加载现有池
@@ -404,7 +404,7 @@ export async function handleUIApiRequests(method, pathParam, req, res, currentCo
                                     const fileContent = readFileSync(filePath, 'utf8');
                                     providerPools = JSON.parse(fileContent);
                                 } catch (readError) {
-                                    console.warn('[UI API] 读取现有 provider_pools.json 失败:', readError.message);
+                                    console.warn('[UI API] 读取现有 provider.json 失败:', readError.message);
                                 }
                             }
 
@@ -438,7 +438,7 @@ export async function handleUIApiRequests(method, pathParam, req, res, currentCo
                             });
                         }
                     } catch (poolError) {
-                        console.error('[UI API] 自动添加到 provider_pools.json 失败:', poolError.message);
+                        console.error('[UI API] 自动添加到 provider.json 失败:', poolError.message);
                         // 文件已上传成功，但添加到池失败，继续返回成功响应
                     }
                 }
@@ -453,7 +453,7 @@ export async function handleUIApiRequests(method, pathParam, req, res, currentCo
                     timestamp: new Date().toISOString()
                 });
 
-                console.log(`[UI API] OAuth凭据文件已上传: ${targetFilePath} (提供商: ${provider}${addedToPool ? ', 已自动添加到 provider_pools.json' : ''})`);
+                console.log(`[UI API] OAuth凭据文件已上传: ${targetFilePath} (提供商: ${provider}${addedToPool ? ', 已自动添加到 provider.json' : ''})`);
 
                 res.writeHead(200, { 'Content-Type': 'application/json' });
                 res.end(JSON.stringify({
@@ -518,7 +518,7 @@ export async function handleUIApiRequests(method, pathParam, req, res, currentCo
             if (newConfig.REQUEST_BASE_DELAY !== undefined) currentConfig.REQUEST_BASE_DELAY = newConfig.REQUEST_BASE_DELAY;
             if (newConfig.CRON_NEAR_MINUTES !== undefined) currentConfig.CRON_NEAR_MINUTES = newConfig.CRON_NEAR_MINUTES;
             if (newConfig.CRON_REFRESH_TOKEN !== undefined) currentConfig.CRON_REFRESH_TOKEN = newConfig.CRON_REFRESH_TOKEN;
-            if (newConfig.PROVIDER_POOLS_FILE_PATH !== undefined) currentConfig.PROVIDER_POOLS_FILE_PATH = newConfig.PROVIDER_POOLS_FILE_PATH;
+            if (newConfig.PROVIDER_FILE_PATH !== undefined) currentConfig.PROVIDER_FILE_PATH = newConfig.PROVIDER_FILE_PATH;
 
             // Handle system prompt update
             if (newConfig.systemPrompt !== undefined) {
@@ -558,11 +558,11 @@ export async function handleUIApiRequests(method, pathParam, req, res, currentCo
                     REQUEST_BASE_DELAY: currentConfig.REQUEST_BASE_DELAY,
                     CRON_NEAR_MINUTES: currentConfig.CRON_NEAR_MINUTES,
                     CRON_REFRESH_TOKEN: currentConfig.CRON_REFRESH_TOKEN,
-                    PROVIDER_POOLS_FILE_PATH: currentConfig.PROVIDER_POOLS_FILE_PATH
+                    PROVIDER_FILE_PATH: currentConfig.PROVIDER_FILE_PATH
                 };
 
                 writeFileSync(configPath, JSON.stringify(configToSave, null, 2), 'utf-8');
-                console.log('[UI API] Configuration saved to config.json (credentials managed in provider_pools.json)');
+                console.log('[UI API] Configuration saved to config.json (credentials managed in provider.json)');
                 
                 // 广播更新事件
                 broadcastEvent('config_update', {
@@ -590,7 +590,7 @@ export async function handleUIApiRequests(method, pathParam, req, res, currentCo
             res.end(JSON.stringify({
                 success: true,
                 message: 'Configuration updated successfully',
-                details: 'Basic configuration updated in config.json. All credentials are managed in provider_pools.json'
+                details: 'Basic configuration updated in config.json. All credentials are managed in provider.json'
             }));
             return true;
         } catch (error) {
@@ -619,8 +619,8 @@ export async function handleUIApiRequests(method, pathParam, req, res, currentCo
         try {
             if (providerPoolManager && providerPoolManager.providerPools) {
                 providerPools = providerPoolManager.providerPools;
-            } else if (currentConfig.PROVIDER_POOLS_FILE_PATH && existsSync(currentConfig.PROVIDER_POOLS_FILE_PATH)) {
-                const poolsData = JSON.parse(readFileSync(currentConfig.PROVIDER_POOLS_FILE_PATH, 'utf-8'));
+            } else if (currentConfig.PROVIDER_FILE_PATH && existsSync(currentConfig.PROVIDER_FILE_PATH)) {
+                const poolsData = JSON.parse(readFileSync(currentConfig.PROVIDER_FILE_PATH, 'utf-8'));
                 providerPools = poolsData;
             }
         } catch (error) {
@@ -641,8 +641,8 @@ export async function handleUIApiRequests(method, pathParam, req, res, currentCo
         try {
             if (providerPoolManager && providerPoolManager.providerPools) {
                 providerPools = providerPoolManager.providerPools;
-            } else if (currentConfig.PROVIDER_POOLS_FILE_PATH && existsSync(currentConfig.PROVIDER_POOLS_FILE_PATH)) {
-                const poolsData = JSON.parse(readFileSync(currentConfig.PROVIDER_POOLS_FILE_PATH, 'utf-8'));
+            } else if (currentConfig.PROVIDER_FILE_PATH && existsSync(currentConfig.PROVIDER_FILE_PATH)) {
+                const poolsData = JSON.parse(readFileSync(currentConfig.PROVIDER_FILE_PATH, 'utf-8'));
                 providerPools = poolsData;
             }
         } catch (error) {
@@ -699,7 +699,7 @@ export async function handleUIApiRequests(method, pathParam, req, res, currentCo
             providerConfig.errorCount = providerConfig.errorCount || 0;
             providerConfig.lastErrorTime = providerConfig.lastErrorTime || null;
 
-            const filePath = currentConfig.PROVIDER_POOLS_FILE_PATH || 'provider_pools.json';
+            const filePath = currentConfig.PROVIDER_FILE_PATH || 'provider.json';
             let providerPools = {};
             
             // Load existing pools
@@ -779,7 +779,7 @@ export async function handleUIApiRequests(method, pathParam, req, res, currentCo
                 return true;
             }
 
-            const filePath = currentConfig.PROVIDER_POOLS_FILE_PATH || 'provider_pools.json';
+            const filePath = currentConfig.PROVIDER_FILE_PATH || 'provider.json';
             let providerPools = {};
             
             // Load existing pools
@@ -860,7 +860,7 @@ export async function handleUIApiRequests(method, pathParam, req, res, currentCo
         const providerUuid = updateProviderMatch[2];
 
         try {
-            const filePath = currentConfig.PROVIDER_POOLS_FILE_PATH || 'provider_pools.json';
+            const filePath = currentConfig.PROVIDER_FILE_PATH || 'provider.json';
             let providerPools = {};
             
             // Load existing pools
@@ -937,7 +937,7 @@ export async function handleUIApiRequests(method, pathParam, req, res, currentCo
         const action = disableEnableProviderMatch[3];
 
         try {
-            const filePath = currentConfig.PROVIDER_POOLS_FILE_PATH || 'provider_pools.json';
+            const filePath = currentConfig.PROVIDER_FILE_PATH || 'provider.json';
             let providerPools = {};
             
             // Load existing pools
@@ -1016,7 +1016,7 @@ export async function handleUIApiRequests(method, pathParam, req, res, currentCo
         const providerUuid = getModelMappingMatch[2];
         
         try {
-            const filePath = currentConfig.PROVIDER_POOLS_FILE_PATH || 'provider_pools.json';
+            const filePath = currentConfig.PROVIDER_FILE_PATH || 'provider.json';
             let providerPools = {};
             
             if (existsSync(filePath)) {
@@ -1061,7 +1061,7 @@ export async function handleUIApiRequests(method, pathParam, req, res, currentCo
                 return true;
             }
             
-            const filePath = currentConfig.PROVIDER_POOLS_FILE_PATH || 'provider_pools.json';
+            const filePath = currentConfig.PROVIDER_FILE_PATH || 'provider.json';
             let providerPools = {};
             
             if (existsSync(filePath)) {
@@ -1131,7 +1131,7 @@ export async function handleUIApiRequests(method, pathParam, req, res, currentCo
                 return true;
             }
             
-            const filePath = currentConfig.PROVIDER_POOLS_FILE_PATH || 'provider_pools.json';
+            const filePath = currentConfig.PROVIDER_FILE_PATH || 'provider.json';
             let providerPools = {};
             
             if (existsSync(filePath)) {
@@ -1370,7 +1370,7 @@ export async function handleUIApiRequests(method, pathParam, req, res, currentCo
             broadcastEvent('config_update', {
                 action: 'reload',
                 filePath: 'config.json',
-                providerPoolsPath: newConfig.PROVIDER_POOLS_FILE_PATH || null,
+                providerPoolsPath: newConfig.PROVIDER_FILE_PATH || null,
                 timestamp: new Date().toISOString()
             });
             
@@ -1381,7 +1381,7 @@ export async function handleUIApiRequests(method, pathParam, req, res, currentCo
                 details: {
                     configReloaded: true,
                     configPath: 'config.json',
-                    providerPoolsPath: newConfig.PROVIDER_POOLS_FILE_PATH || null
+                    providerPoolsPath: newConfig.PROVIDER_FILE_PATH || null
                 }
             }));
             return true;
@@ -1481,7 +1481,7 @@ async function scanConfigFiles(currentConfig, providerPoolManager) {
 
     const usedPaths = new Set(); // 存储已使用的路径，用于判断关联状态
 
-    // 使用最新的提供商池数据 - 所有凭据现在都在 provider_pools.json 中
+    // 使用最新的提供商池数据 - 所有凭据现在都在 provider.json 中
     let providerPools = currentConfig.providerPools;
     if (providerPoolManager && providerPoolManager.providerPools) {
         providerPools = providerPoolManager.providerPools;
@@ -1635,7 +1635,7 @@ function getFileUsageInfo(relativePath, fileName, usedPaths, currentConfig) {
 
     usageInfo.isUsed = true;
 
-    // 所有凭据现在都在 provider_pools.json 中管理，不再检查 config.json
+    // 所有凭据现在都在 provider.json 中管理，不再检查 config.json
 
     // 检查提供商池中的使用情况
     if (currentConfig.providerPools) {

@@ -630,7 +630,7 @@ export async function handleModelListRequest(req, res, service, endpointType, CO
 
         // Check if provider pools are configured
         if (!providerPoolManager?.providerPools) {
-            console.warn(`[ModelList] No provider pools configured. Please configure provider_pools.json`);
+            console.warn(`[ModelList] No provider pools configured. Please configure provider.json`);
             res.writeHead(200, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify(fromProvider === MODEL_PROTOCOL_PREFIX.OPENAI ? { object: 'list', data: [] } : { models: [] }));
             return;
@@ -657,7 +657,7 @@ export async function handleModelListRequest(req, res, service, endpointType, CO
             'openai-responses': 'openai-responses'
         };
         
-        console.log(`[ModelList] Configured providers in provider_pools.json:`, Object.keys(providerPoolManager.providerPools));
+        console.log(`[ModelList] Configured providers in provider.json:`, Object.keys(providerPoolManager.providerPools));
         
         // Iterate through provider pools and add models from models.json
         for (const [providerType, providers] of Object.entries(providerPoolManager.providerPools)) {

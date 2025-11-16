@@ -290,8 +290,8 @@ async function loadConfigList() {
 function generateMockConfigData() {
     return [
         {
-            name: 'provider_pools.json',
-            path: './provider_pools.json',
+            name: 'provider.json',
+            path: './provider.json',
             type: 'provider-pool',
             size: 2048,
             modified: '2025-11-11T04:30:00.000Z',
