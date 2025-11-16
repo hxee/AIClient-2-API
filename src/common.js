@@ -636,14 +636,14 @@ export async function handleModelListRequest(req, res, service, endpointType, CO
             return;
         }
         
-        // Load models from models.config
+        // Load models from models.json
         const { modelsConfigManager } = await import('./models-config-manager.js');
         await modelsConfigManager.ensureConfigLoaded();
         
         const allModels = [];
         const format = fromProvider === MODEL_PROTOCOL_PREFIX.OPENAI ? 'openai' : 'gemini';
         
-        // Map provider types to models.config keys
+        // Map provider types to models.json keys
         const providerTypeMapping = {
             'gemini-cli-oauth': 'gemini-cli',
             'gemini-cli': 'gemini-cli',
@@ -659,7 +659,7 @@ export async function handleModelListRequest(req, res, service, endpointType, CO
         
         console.log(`[ModelList] Configured providers in provider_pools.json:`, Object.keys(providerPoolManager.providerPools));
         
-        // Iterate through provider pools and add models from models.config
+        // Iterate through provider pools and add models from models.json
         for (const [providerType, providers] of Object.entries(providerPoolManager.providerPools)) {
             // Find healthy and enabled providers
             const healthyProviders = providers.filter(p => p.isHealthy && !p.isDisabled);
@@ -671,15 +671,15 @@ export async function handleModelListRequest(req, res, service, endpointType, CO
             
             console.log(`[ModelList] ${providerType}: Found ${healthyProviders.length} healthy provider(s)`);
             
-            // Map to models.config provider key
+            // Map to models.json provider key
             const configProviderKey = providerTypeMapping[providerType] || providerType;
             
             try {
-                // Get models from models.config for this provider
+                // Get models from models.json for this provider
                 const providerModels = await modelsConfigManager.getModelsForProvider(configProviderKey);
                 
                 if (!providerModels || providerModels.length === 0) {
-                    console.warn(`[ModelList] No models found in models.config for ${configProviderKey}`);
+                    console.warn(`[ModelList] No models found in models.json for ${configProviderKey}`);
                     continue;
                 }
                 

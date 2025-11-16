@@ -7,12 +7,12 @@ const __dirname = path.dirname(__filename);
 
 /**
  * 模型配置管理器
- * 负责加载和管理统一的模型配置文件 models.config
+ * 负责加载和管理统一的模型配置文件 models.json
  */
 class ModelsConfigManager {
     constructor() {
         this.config = null;
-        this.configPath = path.join(__dirname, '..', 'models.config');
+        this.configPath = path.join(__dirname, '..', 'models.json');
     }
 
     /**
@@ -26,7 +26,7 @@ class ModelsConfigManager {
             console.log(`[ModelsConfig] Successfully loaded models configuration from ${this.configPath}`);
             return this.config;
         } catch (error) {
-            console.error(`[ModelsConfig] Failed to load models.config: ${error.message}`);
+            console.error(`[ModelsConfig] Failed to load models.json: ${error.message}`);
             throw new Error(`Failed to load models configuration: ${error.message}`);
         }
     }

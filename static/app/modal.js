@@ -1136,15 +1136,15 @@ async function showAddMappingForm(providerUuid) {
     const modal = document.querySelector('.provider-modal');
     const providerType = modal.getAttribute('data-provider-type');
     
-    // 加载 models.config 中的模型列表
+    // 加载 models.json 中的模型列表
     let availableModels = [];
     try {
-        console.log('[showAddMappingForm] Loading models.config...');
+        console.log('[showAddMappingForm] Loading models.json...');
         const authToken = localStorage.getItem('authToken');
         console.log('[showAddMappingForm] Auth token exists:', !!authToken);
         
         // 不发送 Authorization 头，避免静态文件请求被拒绝
-        const modelsConfigResponse = await fetch('/models.config', {
+        const modelsConfigResponse = await fetch('/models.json', {
             method: 'GET',
             headers: {
                 'Content-Type': 'application/json'
@@ -1170,7 +1170,7 @@ async function showAddMappingForm(providerUuid) {
         }
         
         if (availableModels.length === 0) {
-            showToast('models.config 中没有配置 openai-custom 模型', 'warning');
+            showToast('models.json 中没有配置 openai-custom 模型', 'warning');
             console.warn('[showAddMappingForm] No models found for openai-custom');
         }
     } catch (error) {
@@ -1273,10 +1273,10 @@ async function editMapping(providerUuid, clientModel, currentProviderModel) {
     const modal = document.querySelector('.provider-modal');
     const providerType = modal.getAttribute('data-provider-type');
     
-    // 加载 models.config 中的模型列表
+    // 加载 models.json 中的模型列表
     let availableModels = [];
     try {
-        const modelsConfigResponse = await fetch('/models.config', {
+        const modelsConfigResponse = await fetch('/models.json', {
             method: 'GET',
             headers: {
                 'Content-Type': 'application/json'

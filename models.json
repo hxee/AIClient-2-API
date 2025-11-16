@@ -216,12 +216,12 @@
       "models": [
         {
           "id": "qwen3-coder-plus",
-          "name": "Qwen3 Coder Plus",
+          "name": "qwen3-coder-plus",
           "description": "Qwen3 Coder Plus 模型"
         },
         {
           "id": "qwen3-coder-flash",
-          "name": "Qwen3 Coder Flash",
+          "name": "qwen3-coder-flash",
           "description": "Qwen3 Coder Flash 模型"
         }
       ]

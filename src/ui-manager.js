@@ -222,9 +222,9 @@ const upload = multer({
  * @param {http.ServerResponse} res - The HTTP response object
  */
 export async function serveStaticFiles(pathParam, res) {
-    // Handle models.config specially - it's in the root directory
-    if (pathParam === '/models.config') {
-        const modelsConfigPath = path.join(process.cwd(), 'models.config');
+    // Handle models.json specially - it's in the root directory
+    if (pathParam === '/models.json') {
+        const modelsConfigPath = path.join(process.cwd(), 'models.json');
         if (existsSync(modelsConfigPath)) {
             res.writeHead(200, {
                 'Content-Type': 'application/json',
