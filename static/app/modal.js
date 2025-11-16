@@ -1140,13 +1140,22 @@ async function showAddMappingForm(providerUuid) {
     let availableModels = [];
     try {
         console.log('[showAddMappingForm] Loading models.config...');
+        const authToken = localStorage.getItem('authToken');
+        console.log('[showAddMappingForm] Auth token exists:', !!authToken);
+        
+        // 不发送 Authorization 头，避免静态文件请求被拒绝
         const modelsConfigResponse = await fetch('/models.config', {
+            method: 'GET',
             headers: {
-                'Authorization': `Bearer ${localStorage.getItem('authToken')}`
+                'Content-Type': 'application/json'
             }
         });
         
+        console.log('[showAddMappingForm] Response status:', modelsConfigResponse.status);
+        
         if (!modelsConfigResponse.ok) {
+            const errorText = await modelsConfigResponse.text();
+            console.error('[showAddMappingForm] Response error:', errorText);
             throw new Error(`HTTP error! status: ${modelsConfigResponse.status}`);
         }
         
@@ -1227,10 +1236,22 @@ async function saveNewMapping(providerUuid) {
     }
     
     try {
-        await window.apiClient.post(`/providers/${encodeURIComponent(providerType)}/${providerUuid}/model-mapping`, {
-            clientModel,
-            providerModel
+        const response = await fetch(`/api/providers/${encodeURIComponent(providerType)}/${providerUuid}/model-mapping`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${localStorage.getItem('authToken')}`
+            },
+            body: JSON.stringify({
+                clientModel,
+                providerModel
+            })
         });
+        
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.error?.message || '添加失败');
+        }
         
         showToast('模型映射添加成功', 'success');
         
@@ -1264,10 +1285,22 @@ async function editMapping(providerUuid, clientModel, currentProviderModel) {
     }
     
     try {
-        await window.apiClient.post(`/providers/${encodeURIComponent(providerType)}/${providerUuid}/model-mapping`, {
-            clientModel,
-            providerModel: newProviderModel.trim()
+        const response = await fetch(`/api/providers/${encodeURIComponent(providerType)}/${providerUuid}/model-mapping`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${localStorage.getItem('authToken')}`
+            },
+            body: JSON.stringify({
+                clientModel,
+                providerModel: newProviderModel.trim()
+            })
         });
+        
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.error?.message || '更新失败');
+        }
         
         showToast('模型映射更新成功', 'success');
         

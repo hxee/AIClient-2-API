@@ -222,6 +222,20 @@ const upload = multer({
  * @param {http.ServerResponse} res - The HTTP response object
  */
 export async function serveStaticFiles(pathParam, res) {
+    // Handle models.config specially - it's in the root directory
+    if (pathParam === '/models.config') {
+        const modelsConfigPath = path.join(process.cwd(), 'models.config');
+        if (existsSync(modelsConfigPath)) {
+            res.writeHead(200, {
+                'Content-Type': 'application/json',
+                'Access-Control-Allow-Origin': '*'
+            });
+            res.end(readFileSync(modelsConfigPath, 'utf-8'));
+            return true;
+        }
+        return false;
+    }
+    
     const filePath = path.join(process.cwd(), 'static', pathParam === '/' || pathParam === '/index.html' ? 'index.html' : pathParam.replace('/static/', ''));
 
     if (existsSync(filePath)) {
@@ -271,9 +285,9 @@ export async function handleUIApiRequests(method, pathParam, req, res, currentCo
     const isOllamaEndpoint = ollamaEndpoints.includes(pathParam);
     
     // Handle UI management API requests (需要token验证，除了登录接口、健康检查、Events接口和Ollama接口)
-    if (pathParam.startsWith('/api/') && 
-        pathParam !== '/api/login' && 
-        pathParam !== '/api/health' && 
+    if (pathParam.startsWith('/api/') &&
+        pathParam !== '/api/login' &&
+        pathParam !== '/api/health' &&
         pathParam !== '/api/events' &&
         !isOllamaEndpoint) {
         // 检查token验证
