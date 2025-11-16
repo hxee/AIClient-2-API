@@ -6,14 +6,11 @@ import * as os from 'os';
 import open from 'open';
 import { EventEmitter } from 'events';
 import { randomUUID } from 'node:crypto';
+import { getQwenModels } from '../models-config-manager.js';
 
 // --- Constants ---
 const QWEN_DIR = '.qwen';
 const QWEN_CREDENTIAL_FILENAME = 'oauth_creds.json';
-const QWEN_MODEL_LIST = [
-    { id: 'qwen3-coder-plus', name: 'Qwen3 Coder Plus' },
-    { id: 'qwen3-coder-flash', name: 'Qwen3 Coder Flash' },
-];
 
 const TOKEN_REFRESH_BUFFER_MS = 30 * 1000;
 const LOCK_TIMEOUT_MS = 10000;
@@ -522,9 +519,10 @@ export class QwenApiService {
             const processedBody = body;//this.processMessageContent(body);
 
             // Check if model in body is in QWEN_MODEL_LIST, if not, use the first model's id
-            if (processedBody.model && !QWEN_MODEL_LIST.some(model => model.id === processedBody.model)) {
-                console.warn(`[QwenApiService] Model '${processedBody.model}' not found. Using default model: '${QWEN_MODEL_LIST[0].id}'`);
-                processedBody.model = QWEN_MODEL_LIST[0].id;
+            const qwenModels = await getQwenModels();
+            if (processedBody.model && !qwenModels.some(model => model.id === processedBody.model)) {
+                console.warn(`[QwenApiService] Model '${processedBody.model}' not found. Using default model: '${qwenModels[0].id}'`);
+                processedBody.model = qwenModels[0].id;
             }
 
             const defaultTools = [
@@ -603,10 +601,17 @@ export class QwenApiService {
     }
 
     async listModels() {
-        // Return the predefined models for Qwen
-        return {
-            data: QWEN_MODEL_LIST
-        };
+        try {
+            // 从统一配置文件读取模型列表
+            const models = await getQwenModels();
+            return {
+                object: 'list',
+                data: models
+            };
+        } catch (error) {
+            console.error(`Error listing Qwen models from config:`, error.message);
+            throw error;
+        }
     }
 
     isExpiryDateNear() {

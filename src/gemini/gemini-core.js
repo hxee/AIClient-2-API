@@ -5,6 +5,13 @@ import * as path from 'path';
 import * as os from 'os';
 import * as readline from 'readline';
 import { API_ACTIONS, formatExpiryTime } from '../common.js';
+import {
+    getGeminiModels,
+    getGeminiBaseModels,
+    getGeminiAntiTruncationModels,
+    isAntiTruncationModel as checkIsAntiTruncationModel,
+    extractBaseModelFromAnti as getBaseModelFromAnti
+} from '../models-config-manager.js';
 
 // --- Constants ---
 const AUTH_REDIRECT_PORT = 8085;
@@ -14,22 +21,15 @@ const CODE_ASSIST_ENDPOINT = 'https://cloudcode-pa.googleapis.com';
 const CODE_ASSIST_API_VERSION = 'v1internal';
 const OAUTH_CLIENT_ID = '681255809395-oo8ft2oprdrnp9e3aqf6av3hmdib135j.apps.googleusercontent.com';
 const OAUTH_CLIENT_SECRET = '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';
-const GEMINI_MODELS = ['gemini-2.5-flash', 'gemini-2.5-flash-lite', 'gemini-2.5-pro' , 'gemini-2.5-pro-preview-06-05', 'gemini-2.5-flash-preview-09-2025', 'gemini-3-pro-preview-11-2025'];
-const ANTI_TRUNCATION_MODELS = GEMINI_MODELS.map(model => `anti-${model}`);
 
-function is_anti_truncation_model(model) {
-    return ANTI_TRUNCATION_MODELS.some(antiModel => model.includes(antiModel));
+// 使用异步函数包装器来检查防截断模型
+async function is_anti_truncation_model(model) {
+    return await checkIsAntiTruncationModel(model);
 }
 
 // 从防截断模型名中提取实际模型名
-function extract_model_from_anti_model(model) {
-    if (model.startsWith('anti-')) {
-        const originalModel = model.substring(5); // 移除 'anti-' 前缀
-        if (GEMINI_MODELS.includes(originalModel)) {
-            return originalModel;
-        }
-    }
-    return model; // 如果不是anti-前缀或不在原模型列表中，则返回原模型名
+async function extract_model_from_anti_model(model) {
+    return await getBaseModelFromAnti(model);
 }
 
 function toGeminiApiResponse(codeAssistResponse) {
@@ -194,8 +194,9 @@ export class GeminiApiService {
             this.projectId = await this.discoverProjectAndModels();
         } else {
             console.log(`[Gemini] Using provided Project ID: ${this.projectId}`);
-            this.availableModels = GEMINI_MODELS;
-            console.log(`[Gemini] Using fixed models: [${this.availableModels.join(', ')}]`);
+            // 从配置文件加载模型列表
+            this.availableModels = await getGeminiBaseModels();
+            console.log(`[Gemini] Loaded models from config: [${this.availableModels.join(', ')}]`);
         }
         if (this.projectId === 'default') {
             throw new Error("Error: 'default' is not a valid project ID. Please provide a valid Google Cloud Project ID using the --project-id argument.");
@@ -311,8 +312,9 @@ export class GeminiApiService {
         }
 
         console.log('[Gemini] Discovering Project ID...');
-        this.availableModels = GEMINI_MODELS;
-        console.log(`[Gemini] Using fixed models: [${this.availableModels.join(', ')}]`);
+        // 从配置文件加载模型列表
+        this.availableModels = await getGeminiBaseModels();
+        console.log(`[Gemini] Loaded models from config: [${this.availableModels.join(', ')}]`);
         try {
             const initialProjectId = ""
             // Prepare client metadata
@@ -371,8 +373,9 @@ export class GeminiApiService {
     }
 
     async listModels() {
-        if (!this.isInitialized) await this.initialize();
-        const formattedModels = this.availableModels.map(modelId => {
+        // 直接从配置文件读取最新的模型列表，不依赖实例变量
+        const allModels = await getGeminiModels();
+        const formattedModels = allModels.map(modelId => {
             const displayName = modelId.split('-').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
             return {
                 name: `models/${modelId}`, version: "1.0.0", displayName: displayName,
@@ -499,9 +502,10 @@ export class GeminiApiService {
     async generateContent(model, requestBody) {
         console.log(`[Auth Token] Time until expiry: ${formatExpiryTime(this.authClient.credentials.expiry_date)}`);
         let selectedModel = model;
-        if (!GEMINI_MODELS.includes(model)) {
-            console.warn(`[Gemini] Model '${model}' not found. Using default model: '${GEMINI_MODELS[0]}'`);
-            selectedModel = GEMINI_MODELS[0];
+        const baseModels = await getGeminiBaseModels();
+        if (!baseModels.includes(model)) {
+            console.warn(`[Gemini] Model '${model}' not found. Using default model: '${baseModels[0]}'`);
+            selectedModel = baseModels[0];
         }
         const processedRequestBody = ensureRolesInContents(requestBody);
         const apiRequest = { model: selectedModel, project: this.projectId, request: processedRequestBody };
@@ -513,18 +517,19 @@ export class GeminiApiService {
         console.log(`[Auth Token] Time until expiry: ${formatExpiryTime(this.authClient.credentials.expiry_date)}`);
 
         // 检查是否为防截断模型
-        if (is_anti_truncation_model(model)) {
+        if (await is_anti_truncation_model(model)) {
             // 从防截断模型名中提取实际模型名
-            const actualModel = extract_model_from_anti_model(model);
+            const actualModel = await extract_model_from_anti_model(model);
             // 使用防截断流处理
             const processedRequestBody = ensureRolesInContents(requestBody);
             yield* apply_anti_truncation_to_stream(this, actualModel, processedRequestBody);
         } else {
             // 正常流处理
             let selectedModel = model;
-            if (!GEMINI_MODELS.includes(model)) {
-                console.warn(`[Gemini] Model '${model}' not found. Using default model: '${GEMINI_MODELS[0]}'`);
-                selectedModel = GEMINI_MODELS[0];
+            const baseModels = await getGeminiBaseModels();
+            if (!baseModels.includes(model)) {
+                console.warn(`[Gemini] Model '${model}' not found. Using default model: '${baseModels[0]}'`);
+                selectedModel = baseModels[0];
             }
             const processedRequestBody = ensureRolesInContents(requestBody);
             const apiRequest = { model: selectedModel, project: this.projectId, request: processedRequestBody };

@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { getOpenAICustomModels } from '../models-config-manager.js';
 
 // Assumed OpenAI API specification service for interacting with third-party models
 export class OpenAIApiService {
@@ -143,12 +144,21 @@ export class OpenAIApiService {
 
     async listModels() {
         try {
-            const response = await this.axiosInstance.get('/models');
-            return response.data;
+            // 从统一配置文件读取模型列表
+            const modelIds = await getOpenAICustomModels();
+            const models = modelIds.map(id => ({
+                id: id,
+                object: 'model',
+                created: Date.now(),
+                owned_by: 'openai-custom'
+            }));
+            
+            return {
+                object: 'list',
+                data: models
+            };
         } catch (error) {
-            const status = error.response?.status;
-            const data = error.response?.data;
-            console.error(`Error listing OpenAI models (Status: ${status}):`, data || error.message);
+            console.error(`Error listing OpenAI models from config:`, error.message);
             throw error;
         }
     }

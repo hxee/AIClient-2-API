@@ -56,17 +56,21 @@ export async function initApiService(config) {
 /**
  * Get API service adapter, considering provider pools
  * @param {Object} config - The current request configuration
+ * @param {Object} providerPoolManager - Optional provider pool manager instance
  * @returns {Promise<Object>} The API service adapter
  */
-export async function getApiService(config) {
+export async function getApiService(config, providerPoolManagerParam = null) {
     console.log(`[Service Manager] getApiService called with MODEL_PROVIDER: ${config.MODEL_PROVIDER}`);
     console.log(`[Service Manager] Provider pools available: ${config.providerPools ? Object.keys(config.providerPools).join(', ') : 'none'}`);
     
+    const poolManager = providerPoolManagerParam || providerPoolManager;
     let serviceConfig = config;
-    if (providerPoolManager && config.providerPools && config.providerPools[config.MODEL_PROVIDER]) {
+    
+    if (poolManager && config.providerPools && config.providerPools[config.MODEL_PROVIDER]) {
         console.log(`[Service Manager] Found pool for ${config.MODEL_PROVIDER}, selecting from pool...`);
         // 如果有号池管理器，并且当前模型提供者类型有对应的号池，则从号池中选择一个提供者配置
-        const selectedProviderConfig = providerPoolManager.selectProvider(config.MODEL_PROVIDER, config.uuid);
+        // 传递模型名称用于检查映射配置
+        const selectedProviderConfig = poolManager.selectProvider(config.MODEL_PROVIDER, config.uuid, config.requestedModel);
         if (selectedProviderConfig) {
             // 合并选中的提供者配置到当前请求的 config 中
             serviceConfig = deepmerge(config, selectedProviderConfig);

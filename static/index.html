@@ -746,27 +746,51 @@
     <script>
         // 页面加载时检查登录状态
         (async function() {
-            const isAuthenticated = await initAuth();
-            if (!isAuthenticated) {
-                // 如果未认证，initAuth会自动重定向到登录页面
-                return;
-            }
-            // 认证成功，继续加载页面
-            console.log('用户已认证');
-            
-            // 显示登出按钮（如果配置了密码保护）
-            const logoutBtn = document.getElementById('logoutBtn');
-            if (logoutBtn && localStorage.getItem('authToken')) {
-                logoutBtn.style.display = 'inline-block';
-                logoutBtn.addEventListener('click', async () => {
-                    if (confirm('确定要登出吗？')) {
-                        await logout();
+            try {
+                const isAuthenticated = await initAuth();
+                if (!isAuthenticated) {
+                    // 如果未认证，initAuth会自动重定向到登录页面
+                    return;
+                }
+                // 认证成功，继续加载页面
+                console.log('用户已认证，开始加载应用...');
+                
+                // 更新状态显示为已连接
+                const statusBadge = document.getElementById('serverStatus');
+                if (statusBadge) {
+                    statusBadge.className = 'status-badge online';
+                    const statusText = statusBadge.querySelector('.status-text');
+                    if (statusText) {
+                        statusText.textContent = '已连接';
                     }
-                });
-            }
+                }
+                
+                // 显示登出按钮（如果配置了密码保护）
+                const logoutBtn = document.getElementById('logoutBtn');
+                if (logoutBtn && localStorage.getItem('authToken')) {
+                    logoutBtn.style.display = 'inline-block';
+                    logoutBtn.addEventListener('click', async () => {
+                        if (confirm('确定要登出吗？')) {
+                            await logout();
+                        }
+                    });
+                }
 
-            // 更新路径路由示例中的URL前缀
-            updateRoutingExamplesURLs();
+                // 更新路径路由示例中的URL前缀
+                updateRoutingExamplesURLs();
+                
+                console.log('应用加载完成');
+            } catch (error) {
+                console.error('应用初始化失败:', error);
+                const statusBadge = document.getElementById('serverStatus');
+                if (statusBadge) {
+                    statusBadge.className = 'status-badge offline';
+                    const statusText = statusBadge.querySelector('.status-text');
+                    if (statusText) {
+                        statusText.textContent = '连接失败';
+                    }
+                }
+            }
         })();
 
         // 更新路径路由示例中的URL前缀

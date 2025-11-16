@@ -4,6 +4,7 @@ import { promises as fs } from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 import * as crypto from 'crypto';
+import { getClaudeKiroMapping, getModelsForProvider } from '../models-config-manager.js';
 
 const KIRO_CONSTANTS = {
     REFRESH_URL: 'https://prod.{{region}}.auth.desktop.kiro.dev/refreshToken',
@@ -20,14 +21,8 @@ const KIRO_CONSTANTS = {
     ORIGIN_AI_EDITOR: 'AI_EDITOR',
 };
 
-const MODEL_MAPPING = {
-    "claude-sonnet-4-5": "CLAUDE_SONNET_4_5_20250929_V1_0",
-    "claude-sonnet-4-5-20250929": "CLAUDE_SONNET_4_5_20250929_V1_0",
-    "claude-sonnet-4-20250514": "CLAUDE_SONNET_4_20250514_V1_0",
-    "claude-3-7-sonnet-20250219": "CLAUDE_3_7_SONNET_20250219_V1_0",
-    "amazonq-claude-sonnet-4-20250514": "CLAUDE_SONNET_4_20250514_V1_0",
-    "amazonq-claude-3-7-sonnet-20250219": "CLAUDE_3_7_SONNET_20250219_V1_0"
-};
+// 将在 KiroApiService 初始化时从配置加载
+let MODEL_MAPPING = {};
 
 const KIRO_AUTH_TOKEN_FILE = "kiro-auth-token.json";
 
@@ -232,6 +227,7 @@ export class KiroApiService {
         this.credPath = config.KIRO_OAUTH_CREDS_DIR_PATH || path.join(os.homedir(), ".aws", "sso", "cache");
         this.credsBase64 = config.KIRO_OAUTH_CREDS_BASE64;
         this.useSystemProxy = config?.USE_SYSTEM_PROXY_KIRO ?? false;
+        this.modelMapping = null;
         console.log(`[Kiro] System proxy ${this.useSystemProxy ? 'enabled' : 'disabled'}`);
         // this.accessToken = config.KIRO_ACCESS_TOKEN;
         // this.refreshToken = config.KIRO_REFRESH_TOKEN;
@@ -265,6 +261,12 @@ export class KiroApiService {
     async initialize() {
         if (this.isInitialized) return;
         console.log('[Kiro] Initializing Kiro API Service...');
+        
+        // 从配置文件加载模型映射
+        this.modelMapping = await getClaudeKiroMapping();
+        MODEL_MAPPING = this.modelMapping;
+        console.log(`[Kiro] Loaded ${Object.keys(this.modelMapping).length} model mappings from config`);
+        
         await this.initializeAuth();
         const macSha256 = await getMacAddressSha256();
         const axiosConfig = {
@@ -1114,11 +1116,18 @@ async initializeAuth(forceRefresh = false) {
      * List available models
      */
     async listModels() {
-        const models = Object.keys(MODEL_MAPPING).map(id => ({
-            name: id
-        }));
-        
-        return { models: models };
+        try {
+            // 从统一配置文件读取模型列表
+            const configModels = await getModelsForProvider('claude-kiro');
+            const models = configModels.map(model => ({
+                name: model.id
+            }));
+            
+            return { models: models };
+        } catch (error) {
+            console.error(`Error listing Kiro models from config:`, error.message);
+            throw error;
+        }
     }
 
     /**

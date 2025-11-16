@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { getOpenAIResponsesModels } from '../models-config-manager.js';
 
 // OpenAI Responses API specification service for interacting with third-party models
 export class OpenAIResponsesApiService {
@@ -134,12 +135,21 @@ export class OpenAIResponsesApiService {
 
     async listModels() {
         try {
-            const response = await this.axiosInstance.get('/models');
-            return response.data;
+            // 从统一配置文件读取模型列表
+            const modelIds = await getOpenAIResponsesModels();
+            const models = modelIds.map(id => ({
+                id: id,
+                object: 'model',
+                created: Date.now(),
+                owned_by: 'openai-responses'
+            }));
+            
+            return {
+                object: 'list',
+                data: models
+            };
         } catch (error) {
-            const status = error.response?.status;
-            const data = error.response?.data;
-            console.error(`Error listing OpenAI Responses models (Status: ${status}):`, data || error.message);
+            console.error(`Error listing OpenAI Responses models from config:`, error.message);
             throw error;
         }
     }
