@@ -114,16 +114,6 @@
           "id": "claude-opus-4-20250514",
           "name": "Claude Opus 4 (2025-05-14)",
           "description": "Claude Opus 4.0 版本"
-        },
-        {
-          "id": "claude-3-7-sonnet-20250219",
-          "name": "Claude 3.7 Sonnet",
-          "description": "Claude 3.7 Sonnet 模型"
-        },
-        {
-          "id": "claude-3-5-sonnet-20241022",
-          "name": "Claude 3.5 Sonnet",
-          "description": "Claude 3.5 Sonnet 模型"
         }
       ]
     },

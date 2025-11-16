@@ -67,18 +67,15 @@ class ModelsManager {
             
             html += `
                 <div class="provider-card" data-provider="${providerKey}">
-                    <div class="provider-card-header">
+                    <div class="provider-card-header" onclick="window.modelsManager.toggleProvider('${providerKey}')">
                         <div class="provider-info">
                             <h3>${this.getProviderDisplayName(providerKey)}</h3>
                             <p class="provider-description">${description}</p>
                         </div>
                         <div class="provider-actions">
                             <span class="model-count">${models.length} 个模型</span>
-                            <button class="btn btn-primary btn-sm" onclick="window.modelsManager.showAddModelModal('${providerKey}')">
+                            <button class="btn btn-primary btn-sm" onclick="event.stopPropagation(); window.modelsManager.showAddModelModal('${providerKey}')">
                                 <i class="fas fa-plus"></i> 添加模型
-                            </button>
-                            <button class="btn btn-outline btn-sm toggle-models" data-provider="${providerKey}">
-                                <i class="fas fa-chevron-down"></i>
                             </button>
                         </div>
                     </div>
@@ -91,23 +88,6 @@ class ModelsManager {
         
         html += '</div>';
         container.innerHTML = html;
-
-        // 添加展开/收起功能
-        container.querySelectorAll('.toggle-models').forEach(btn => {
-            btn.addEventListener('click', (e) => {
-                const providerKey = e.currentTarget.dataset.provider;
-                const modelsList = document.getElementById(`models-${providerKey}`);
-                const icon = e.currentTarget.querySelector('i');
-                
-                if (modelsList.style.display === 'none') {
-                    modelsList.style.display = 'block';
-                    icon.className = 'fas fa-chevron-up';
-                } else {
-                    modelsList.style.display = 'none';
-                    icon.className = 'fas fa-chevron-down';
-                }
-            });
-        });
     }
 
     /**
@@ -152,6 +132,20 @@ class ModelsManager {
     }
 
     /**
+     * 切换提供商展开/收起状态
+     */
+    toggleProvider(providerKey) {
+        const modelsList = document.getElementById(`models-${providerKey}`);
+        if (modelsList) {
+            if (modelsList.style.display === 'none') {
+                modelsList.style.display = 'block';
+            } else {
+                modelsList.style.display = 'none';
+            }
+        }
+    }
+
+    /**
      * 获取提供商显示名称
      */
     getProviderDisplayName(providerKey) {
@@ -184,15 +178,16 @@ class ModelsManager {
         const isKiro = providerKey === 'claude-kiro';
         
         const modal = document.createElement('div');
-        modal.className = 'modal-overlay';
-        modal.style.display = 'flex';
+        modal.className = 'provider-modal';
         modal.innerHTML = `
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h3>添加模型</h3>
-                    <button class="modal-close">&times;</button>
+            <div class="provider-modal-content">
+                <div class="provider-modal-header">
+                    <h3><i class="fas fa-plus"></i> 添加模型</h3>
+                    <button class="modal-close" onclick="this.closest('.provider-modal').remove()">
+                        <i class="fas fa-times"></i>
+                    </button>
                 </div>
-                <div class="modal-body">
+                <div class="provider-modal-body">
                     <div class="form-group">
                         <label for="modelId">模型 ID *</label>
                         <input type="text" id="modelId" class="form-control" placeholder="例如: gpt-4" required>
@@ -212,23 +207,25 @@ class ModelsManager {
                     </div>
                     ` : ''}
                 </div>
-                <div class="modal-footer">
-                    <button class="btn btn-secondary modal-close">取消</button>
-                    <button class="btn btn-primary" id="saveModelBtn">保存</button>
+                <div class="provider-modal-footer" style="padding: 1.5rem 2rem; border-top: 1px solid var(--border-color); display: flex; justify-content: flex-end; gap: 1rem; background: var(--bg-secondary);">
+                    <button class="btn btn-secondary" onclick="this.closest('.provider-modal').remove()">取消</button>
+                    <button class="btn btn-success" id="saveModelBtn">
+                        <i class="fas fa-save"></i> 保存
+                    </button>
                 </div>
             </div>
         `;
         
         document.body.appendChild(modal);
         
-        // 关闭按钮事件
-        modal.querySelectorAll('.modal-close').forEach(btn => {
-            btn.addEventListener('click', () => modal.remove());
-        });
-        
         // 点击背景关闭
         modal.addEventListener('click', (e) => {
             if (e.target === modal) modal.remove();
+        });
+        
+        // 阻止模态框内容区域的点击事件冒泡
+        modal.querySelector('.provider-modal-content').addEventListener('click', (e) => {
+            e.stopPropagation();
         });
         
         // 保存按钮事件
@@ -298,15 +295,16 @@ class ModelsManager {
         const isKiro = providerKey === 'claude-kiro';
         
         const modal = document.createElement('div');
-        modal.className = 'modal-overlay';
-        modal.style.display = 'flex';
+        modal.className = 'provider-modal';
         modal.innerHTML = `
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h3>编辑模型</h3>
-                    <button class="modal-close">&times;</button>
+            <div class="provider-modal-content">
+                <div class="provider-modal-header">
+                    <h3><i class="fas fa-edit"></i> 编辑模型</h3>
+                    <button class="modal-close" onclick="this.closest('.provider-modal').remove()">
+                        <i class="fas fa-times"></i>
+                    </button>
                 </div>
-                <div class="modal-body">
+                <div class="provider-modal-body">
                     <div class="form-group">
                         <label for="modelId">模型 ID *</label>
                         <input type="text" id="modelId" class="form-control" value="${model.id}" required>
@@ -326,23 +324,25 @@ class ModelsManager {
                     </div>
                     ` : ''}
                 </div>
-                <div class="modal-footer">
-                    <button class="btn btn-secondary modal-close">取消</button>
-                    <button class="btn btn-primary" id="saveModelBtn">保存</button>
+                <div class="provider-modal-footer" style="padding: 1.5rem 2rem; border-top: 1px solid var(--border-color); display: flex; justify-content: flex-end; gap: 1rem; background: var(--bg-secondary);">
+                    <button class="btn btn-secondary" onclick="this.closest('.provider-modal').remove()">取消</button>
+                    <button class="btn btn-success" id="saveModelBtn">
+                        <i class="fas fa-save"></i> 保存
+                    </button>
                 </div>
             </div>
         `;
         
         document.body.appendChild(modal);
         
-        // 关闭按钮事件
-        modal.querySelectorAll('.modal-close').forEach(btn => {
-            btn.addEventListener('click', () => modal.remove());
-        });
-        
         // 点击背景关闭
         modal.addEventListener('click', (e) => {
             if (e.target === modal) modal.remove();
+        });
+        
+        // 阻止模态框内容区域的点击事件冒泡
+        modal.querySelector('.provider-modal-content').addEventListener('click', (e) => {
+            e.stopPropagation();
         });
         
         // 保存按钮事件
