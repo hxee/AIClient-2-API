@@ -1,6 +1,6 @@
 // 模型管理模块
 
-import { showToast } from './utils.js';
+import { showToast, getProviderDisplayName } from './utils.js';
 
 /**
  * 模型管理类
@@ -60,9 +60,26 @@ class ModelsManager {
 
         const providers = this.modelsData.providers || {};
         
+        // 定义提供商显示顺序，与提供商池管理保持一致
+        // 先 CLI（按字母顺序），再其他（按字母顺序）
+        const providerDisplayOrder = [
+            'gemini-cli',        // Gemini CLI
+            'claude-kiro',       // Kiro CLI
+            'qwen-api',          // Qwen CLI
+            'claude-custom',     // Claude
+            'openai-custom',     // OpenAI Chat
+            'openai-responses'   // OpenAI Responses
+        ];
+        
+        // 获取所有提供商并按指定顺序排序
+        const allProviderKeys = Object.keys(providers);
+        const sortedProviderKeys = providerDisplayOrder.filter(key => allProviderKeys.includes(key))
+            .concat(allProviderKeys.filter(key => !providerDisplayOrder.includes(key)));
+        
         let html = '<div class="models-provider-list">';
         
-        for (const [providerKey, providerData] of Object.entries(providers)) {
+        for (const providerKey of sortedProviderKeys) {
+            const providerData = providers[providerKey];
             const models = providerData.models || [];
             const description = providerData.description || '';
             
@@ -70,7 +87,7 @@ class ModelsManager {
                 <div class="provider-card" data-provider="${providerKey}">
                     <div class="provider-card-header" onclick="window.modelsManager.toggleProvider('${providerKey}')">
                         <div class="provider-info">
-                            <h3>${this.getProviderDisplayName(providerKey)}</h3>
+                            <h3>${getProviderDisplayName(providerKey)}</h3>
                             <p class="provider-description">${description}</p>
                         </div>
                         <div class="provider-actions">
@@ -146,21 +163,6 @@ class ModelsManager {
         if (modelsList) {
             modelsList.style.display = this.expandedProviders.has(providerKey) ? 'block' : 'none';
         }
-    }
-
-    /**
-     * 获取提供商显示名称
-     */
-    getProviderDisplayName(providerKey) {
-        const displayNames = {
-            'openai-custom': 'OpenAI Custom',
-            'openai-responses': 'OpenAI Responses',
-            'gemini-cli': 'Gemini CLI',
-            'claude-custom': 'Claude Custom',
-            'claude-kiro': 'Claude Kiro',
-            'qwen-api': 'Qwen API'
-        };
-        return displayNames[providerKey] || providerKey;
     }
 
     /**

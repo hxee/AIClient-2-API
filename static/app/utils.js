@@ -72,10 +72,14 @@ function getFieldLabel(key) {
 
 const PROVIDER_DISPLAY_NAMES = {
     'gemini-cli-oauth': 'Gemini CLI',
+    'gemini-cli': 'Gemini CLI',
     'openai-qwen-oauth': 'Qwen CLI',
+    'qwen-api': 'Qwen CLI',
     'claude-kiro-oauth': 'Kiro CLI',
+    'claude-kiro': 'Kiro CLI',
     'openai-custom': 'OpenAI Chat',
     'openaiResponses-custom': 'OpenAI Responses',
+    'openai-responses': 'OpenAI Responses',
     'claude-custom': 'Claude'
 };
 
