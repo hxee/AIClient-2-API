@@ -51,7 +51,7 @@ function showProviderManagerModal(data) {
                 </div>
                 
                 <div class="provider-list" id="providerList">
-                    ${renderProviderList(providers)}
+                    ${renderProviderList(providers, providerType)}
                 </div>
             </div>
         </div>
@@ -154,7 +154,7 @@ function closeProviderModal(button) {
  * @param {Array} providers - 提供商数组
  * @returns {string} HTML字符串
  */
-function renderProviderList(providers) {
+function renderProviderList(providers, providerType) {
     return providers.map(provider => {
         const isHealthy = provider.isHealthy;
         const isDisabled = provider.isDisabled || false;
@@ -205,7 +205,7 @@ function renderProviderList(providers) {
                 </div>
                 <div class="provider-item-content" id="content-${provider.uuid}">
                     <div class="">
-                        ${renderProviderConfig(provider)}
+                        ${renderProviderConfig(provider, providerType)}
                     </div>
                 </div>
             </div>
@@ -218,14 +218,14 @@ function renderProviderList(providers) {
  * @param {Object} provider - 提供商对象
  * @returns {string} HTML字符串
  */
-function renderProviderConfig(provider) {
+function renderProviderConfig(provider, providerType) {
     // 获取字段映射，确保顺序一致
     const fieldOrder = getFieldOrder(provider);
     
     // 检查是否为 openai-custom 提供商
-    const modal = document.querySelector('.provider-modal');
-    const providerType = modal ? modal.getAttribute('data-provider-type') : '';
     const isOpenAICustom = providerType === 'openai-custom';
+    
+    console.log('[renderProviderConfig] Provider Type:', providerType, 'isOpenAICustom:', isOpenAICustom);
     
     // 先渲染基础配置字段（checkModelName 和 checkHealth）
     let html = '<div class="form-grid">';
@@ -410,7 +410,7 @@ function renderModelMappingSection(provider) {
         <div class="model-mapping-section">
             <div class="model-mapping-header">
                 <h4><i class="fas fa-exchange-alt"></i> 模型映射配置</h4>
-                <button class="btn btn-sm btn-primary" onclick="window.showAddMappingForm('${provider.uuid}')" disabled>
+                <button class="btn-add-mapping" onclick="window.showAddMappingForm('${provider.uuid}')">
                     <i class="fas fa-plus"></i> 添加映射
                 </button>
             </div>
@@ -443,10 +443,10 @@ function renderModelMappingSection(provider) {
                         </div>
                     </div>
                     <div class="mapping-actions">
-                        <button class="btn-icon btn-edit-mapping" onclick="window.editMapping('${provider.uuid}', '${escapeHtml(clientModel)}', '${escapeHtml(providerModel)}')" disabled title="编辑映射">
+                        <button class="btn-edit-mapping" onclick="window.editMapping('${provider.uuid}', '${escapeHtml(clientModel)}', '${escapeHtml(providerModel)}')" title="编辑映射">
                             <i class="fas fa-edit"></i>
                         </button>
-                        <button class="btn-icon btn-delete-mapping" onclick="window.deleteMapping('${provider.uuid}', '${escapeHtml(clientModel)}')" disabled title="删除映射">
+                        <button class="btn-delete-mapping" onclick="window.deleteMapping('${provider.uuid}', '${escapeHtml(clientModel)}')" title="删除映射">
                             <i class="fas fa-trash"></i>
                         </button>
                     </div>
@@ -471,11 +471,11 @@ function renderModelMappingSection(provider) {
 function getFieldOrder(provider) {
     const orderedFields = ['vendorName', 'checkModelName', 'checkHealth'];
     
-    // 获取所有其他配置项
+    // 获取所有其他配置项，排除 modelMapping 因为它有专门的渲染函数
     const otherFields = Object.keys(provider).filter(key =>
         key !== 'isHealthy' && key !== 'lastUsed' && key !== 'usageCount' &&
         key !== 'errorCount' && key !== 'lastErrorTime' && key !== 'uuid' &&
-        key !== 'isDisabled' && !orderedFields.includes(key)
+        key !== 'isDisabled' && key !== 'modelMapping' && !orderedFields.includes(key)
     );
     
     // 按字母顺序排序其他字段
@@ -535,12 +535,6 @@ function editProvider(uuid, event) {
             select.disabled = false;
         });
         
-        // 启用模型映射按钮
-        const mappingButtons = providerDetail.querySelectorAll('.model-mapping-section button');
-        mappingButtons.forEach(button => {
-            button.disabled = false;
-        });
-        
         // 替换编辑按钮为保存和取消按钮，但保留禁用/启用按钮
         const actionsGroup = providerDetail.querySelector('.provider-actions-group');
         const toggleButton = actionsGroup.querySelector('[onclick*="toggleProviderStatus"]');
@@ -598,12 +592,6 @@ function cancelEdit(uuid, event) {
         // 恢复原始值
         const originalValue = select.dataset.configValue;
         select.value = originalValue || '';
-    });
-    
-    // 禁用模型映射按钮
-    const mappingButtons = providerDetail.querySelectorAll('.model-mapping-section button');
-    mappingButtons.forEach(button => {
-        button.disabled = true;
     });
     
     // 恢复原来的编辑和删除按钮，但保留禁用/启用按钮
@@ -717,7 +705,7 @@ async function refreshProviderConfig(providerType) {
             // 重新渲染提供商列表
             const providerList = modal.querySelector('.provider-list');
             if (providerList) {
-                providerList.innerHTML = renderProviderList(data.providers);
+                providerList.innerHTML = renderProviderList(data.providers, providerType);
             }
         }
         
@@ -1155,15 +1143,30 @@ async function showAddMappingForm(providerUuid) {
     // 加载 models.config 中的模型列表
     let availableModels = [];
     try {
+        console.log('[showAddMappingForm] Loading models.config...');
         const modelsConfigResponse = await fetch('/models.config');
+        
+        if (!modelsConfigResponse.ok) {
+            throw new Error(`HTTP error! status: ${modelsConfigResponse.status}`);
+        }
+        
         const modelsConfig = await modelsConfigResponse.json();
+        console.log('[showAddMappingForm] Loaded config:', modelsConfig);
         
         if (modelsConfig.providers && modelsConfig.providers['openai-custom']) {
             availableModels = modelsConfig.providers['openai-custom'].models || [];
+            console.log('[showAddMappingForm] Available models:', availableModels);
+        } else {
+            console.warn('[showAddMappingForm] No openai-custom provider found in config');
+        }
+        
+        if (availableModels.length === 0) {
+            showToast('models.config 中没有配置 openai-custom 模型', 'warning');
+            console.warn('[showAddMappingForm] No models found for openai-custom');
         }
     } catch (error) {
-        console.error('Failed to load models config:', error);
-        showToast('加载模型配置失败', 'error');
+        console.error('[showAddMappingForm] Failed to load models config:', error);
+        showToast('加载模型配置失败: ' + error.message, 'error');
         return;
     }
     
