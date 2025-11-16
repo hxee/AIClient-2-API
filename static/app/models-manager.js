@@ -8,6 +8,7 @@ import { showToast } from './utils.js';
 class ModelsManager {
     constructor() {
         this.modelsData = null;
+        this.expandedProviders = new Set(); // 记录展开的提供商
         this.initEventListeners();
     }
 
@@ -79,7 +80,7 @@ class ModelsManager {
                             </button>
                         </div>
                     </div>
-                    <div class="provider-models-list" id="models-${providerKey}" style="display: none;">
+                    <div class="provider-models-list" id="models-${providerKey}" style="display: ${this.expandedProviders.has(providerKey) ? 'block' : 'none'};">
                         ${this.renderModelsList(providerKey, models)}
                     </div>
                 </div>
@@ -135,13 +136,15 @@ class ModelsManager {
      * 切换提供商展开/收起状态
      */
     toggleProvider(providerKey) {
+        if (this.expandedProviders.has(providerKey)) {
+            this.expandedProviders.delete(providerKey);
+        } else {
+            this.expandedProviders.add(providerKey);
+        }
+        
         const modelsList = document.getElementById(`models-${providerKey}`);
         if (modelsList) {
-            if (modelsList.style.display === 'none') {
-                modelsList.style.display = 'block';
-            } else {
-                modelsList.style.display = 'none';
-            }
+            modelsList.style.display = this.expandedProviders.has(providerKey) ? 'block' : 'none';
         }
     }
 
@@ -180,7 +183,7 @@ class ModelsManager {
         const modal = document.createElement('div');
         modal.className = 'provider-modal';
         modal.innerHTML = `
-            <div class="provider-modal-content">
+            <div class="provider-modal-content" style="max-width: 600px;">
                 <div class="provider-modal-header">
                     <h3><i class="fas fa-plus"></i> 添加模型</h3>
                     <button class="modal-close" onclick="this.closest('.provider-modal').remove()">
@@ -297,7 +300,7 @@ class ModelsManager {
         const modal = document.createElement('div');
         modal.className = 'provider-modal';
         modal.innerHTML = `
-            <div class="provider-modal-content">
+            <div class="provider-modal-content" style="max-width: 600px;">
                 <div class="provider-modal-header">
                     <h3><i class="fas fa-edit"></i> 编辑模型</h3>
                     <button class="modal-close" onclick="this.closest('.provider-modal').remove()">

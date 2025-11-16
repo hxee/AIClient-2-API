@@ -24,11 +24,6 @@
           "id": "openai-responses-A",
           "name": "OpenAI Responses Model A",
           "description": "自定义 OpenAI Responses 模型 A"
-        },
-        {
-          "id": "openai-responses-B",
-          "name": "OpenAI Responses Model B",
-          "description": "自定义 OpenAI Responses 模型 B"
         }
       ]
     },
@@ -100,11 +95,6 @@
     "claude-custom": {
       "description": "Anthropic Claude 提供商 - 直接访问 Claude API",
       "models": [
-        {
-          "id": "claude-4-sonnet",
-          "name": "Claude 4 Sonnet",
-          "description": "Claude 4 Sonnet 模型"
-        },
         {
           "id": "claude-sonnet-4-20250514",
           "name": "Claude Sonnet 4 (2025-05-14)",
