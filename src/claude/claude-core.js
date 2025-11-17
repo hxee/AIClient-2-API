@@ -57,6 +57,11 @@ export class ClaudeApiService {
         const maxRetries = this.config.REQUEST_MAX_RETRIES;
         const baseDelay = this.config.REQUEST_BASE_DELAY; // 1 second base delay
 
+        // 记录详细的请求信息
+        const vendorName = this.config.vendorName || 'unknown';
+        const fullUrl = `${this.baseUrl}${endpoint}`;
+        console.log(`[Claude Request] Vendor: ${vendorName}, Method: POST, Full URL: ${fullUrl}, Model: ${body.model || 'N/A'}`);
+
         try {
             const response = await this.client.post(endpoint, body);
             return response.data;
@@ -99,6 +104,11 @@ export class ClaudeApiService {
     async *streamApi(endpoint, body, isRetry = false, retryCount = 0) {
         const maxRetries = this.config.REQUEST_MAX_RETRIES;
         const baseDelay = this.config.REQUEST_BASE_DELAY; // 1 second base delay
+
+        // 记录详细的请求信息
+        const vendorName = this.config.vendorName || 'unknown';
+        const fullUrl = `${this.baseUrl}${endpoint}`;
+        console.log(`[Claude Stream Request] Vendor: ${vendorName}, Method: POST, Full URL: ${fullUrl}, Model: ${body.model || 'N/A'}`);
 
         try {
             const response = await this.client.post(endpoint, { ...body, stream: true }, { responseType: 'stream' });

@@ -548,11 +548,17 @@ export async function handleStreamRequest(res, service, model, requestBody, from
 
 export async function handleUnaryRequest(res, service, model, requestBody, fromProvider, toProvider, PROMPT_LOG_MODE, PROMPT_LOG_FILENAME, providerPoolManager, pooluuid) {
     try{
+        console.log(`[Unary Request] Starting content generation - fromProvider: ${fromProvider}, toProvider: ${toProvider}, model: ${model}`);
+        
         // The service returns the response in its native format (toProvider).
         const needsConversion = getProtocolPrefix(fromProvider) !== getProtocolPrefix(toProvider);
         requestBody.model = model;
         // fs.writeFile('oldRequest'+Date.now()+'.json', JSON.stringify(requestBody));
+        
+        console.log(`[Unary Request] Calling service.generateContent...`);
         const nativeResponse = await service.generateContent(model, requestBody);
+        console.log(`[Unary Request] ✓ Received response from service`);
+        
         const responseText = extractResponseText(nativeResponse, toProvider);
 
         // Convert the response back to the client's format (fromProvider), if necessary.
@@ -562,9 +568,10 @@ export async function handleUnaryRequest(res, service, model, requestBody, fromP
             clientResponse = convertData(nativeResponse, 'response', toProvider, fromProvider, model);
         }
 
-        //console.log(`[Response] Sending response to client: ${JSON.stringify(clientResponse)}`);
+        console.log(`[Unary Request] Sending response to client`);
         await handleUnifiedResponse(res, JSON.stringify(clientResponse), false);
         await logConversation('output', responseText, PROMPT_LOG_MODE, PROMPT_LOG_FILENAME);
+        console.log(`[Unary Request] ✓ Request completed successfully`);
         // fs.writeFile('oldResponse'+Date.now()+'.json', JSON.stringify(clientResponse));
     } catch (error) {
         console.error('\n[Server] Error during unary processing:', error.stack);        // Skip marking providers unhealthy on unary errors; fallback logic handles retries
@@ -577,6 +584,8 @@ export async function handleUnaryRequest(res, service, model, requestBody, fromP
                 details: error.stack
             }
         };
+        
+        console.log(`[Unary Request] Sending error response to client`);
         await handleUnifiedResponse(res, JSON.stringify(errorResponse), false);
     }
 }
@@ -785,8 +794,17 @@ export async function handleContentGenerationRequest(req, res, service, endpoint
     }
     
     // 2. Determine the correct provider based on raw model name (with prefix)
-    const providerSelection = getProviderByModelName(rawModel, providerPoolManager, CONFIG.MODEL_PROVIDER);
-    const toProvider = providerSelection.providerType || CONFIG.MODEL_PROVIDER;
+    // Use fromProvider as fallback instead of CONFIG.MODEL_PROVIDER to avoid wrong provider selection
+    const defaultProviderByEndpoint = {
+        [MODEL_PROTOCOL_PREFIX.OPENAI]: MODEL_PROVIDER.OPENAI_CUSTOM,
+        [MODEL_PROTOCOL_PREFIX.CLAUDE]: MODEL_PROVIDER.CLAUDE_CUSTOM,
+        [MODEL_PROTOCOL_PREFIX.GEMINI]: MODEL_PROVIDER.GEMINI_CLI,
+        [MODEL_PROTOCOL_PREFIX.OPENAI_RESPONSES]: MODEL_PROVIDER.OPENAI_CUSTOM_RESPONSES,
+    };
+    const fallbackProvider = defaultProviderByEndpoint[fromProvider] || CONFIG.MODEL_PROVIDER;
+    
+    const providerSelection = getProviderByModelName(rawModel, providerPoolManager, fallbackProvider);
+    const toProvider = providerSelection.providerType || fallbackProvider;
     const selectedProviderUuid = providerSelection.providerConfig?.uuid;
     const selectedProviderConfig = providerSelection.providerConfig;
     
@@ -829,6 +847,18 @@ export async function handleContentGenerationRequest(req, res, service, endpoint
     
     // 6. Get the correct service for the selected provider
     const correctService = await getApiService({ ...CONFIG, MODEL_PROVIDER: toProvider, uuid: selectedProviderUuid, requestedModel: model }, providerPoolManager);
+    
+    // Log detailed request information
+    const baseUrl = correctService.baseUrl || 'unknown';
+    const vendorName = selectedProviderConfig?.vendorName || 'unknown';
+    console.log(`\n========== REQUEST INFO ==========`);
+    console.log(`[Request] Provider Type: ${toProvider}`);
+    console.log(`[Request] Vendor Name: ${vendorName}`);
+    console.log(`[Request] Provider UUID: ${selectedProviderUuid || 'N/A'}`);
+    console.log(`[Request] Base URL: ${baseUrl}`);
+    console.log(`[Request] Model: ${model}`);
+    console.log(`[Request] Stream: ${isStream}`);
+    console.log(`==================================\n`);
     
     // 7. Call the appropriate stream or unary handler, passing the provider info.
     if (isStream) {

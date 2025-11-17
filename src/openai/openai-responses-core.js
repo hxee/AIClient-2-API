@@ -24,6 +24,11 @@ export class OpenAIResponsesApiService {
         const maxRetries = this.config.REQUEST_MAX_RETRIES || 3;
         const baseDelay = this.config.REQUEST_BASE_DELAY || 1000;  // 1 second base delay
 
+        // 记录详细的请求信息
+        const vendorName = this.config.vendorName || 'unknown';
+        const fullUrl = `${this.baseUrl}${endpoint}`;
+        console.log(`[OpenAI Responses Request] Vendor: ${vendorName}, BaseURL: ${this.baseUrl}, Endpoint: ${endpoint}, Full URL: ${fullUrl}, Model: ${body.model || 'N/A'}`);
+
         try {
             const response = await this.axiosInstance.post(endpoint, body);
             return response.data;
@@ -59,6 +64,11 @@ export class OpenAIResponsesApiService {
     async *streamApi(endpoint, body, isRetry = false, retryCount = 0) {
         const maxRetries = this.config.REQUEST_MAX_RETRIES || 3;
         const baseDelay = this.config.REQUEST_BASE_DELAY || 1000;  // 1 second base delay
+
+        // 记录详细的请求信息
+        const vendorName = this.config.vendorName || 'unknown';
+        const fullUrl = `${this.baseUrl}${endpoint}`;
+        console.log(`[OpenAI Responses Stream Request] Vendor: ${vendorName}, BaseURL: ${this.baseUrl}, Endpoint: ${endpoint}, Full URL: ${fullUrl}, Model: ${body.model || 'N/A'}`);
 
         // OpenAI 的流式请求需要将 stream 设置为 true
         const streamRequestBody = { ...body, stream: true };

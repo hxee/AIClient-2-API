@@ -126,24 +126,6 @@ export function createRequestHandler(config, providerPoolManager) {
             await handleOllamaShow(req, res);
             return;
         }
-
-        // 获取或选择 API Service 实例
-        let apiService;
-        try {
-            console.log(`[Service] Getting API service for provider: ${currentConfig.MODEL_PROVIDER}`);
-            apiService = await getApiService(currentConfig);
-            console.log(`[Service] ✓ API service obtained successfully`);
-        } catch (error) {
-            console.error(`[Service] ✗ Failed to get API service: ${error.message}`);
-            handleError(res, { statusCode: 500, message: `Failed to get API service: ${error.message}` });
-            const poolManager = getProviderPoolManager();
-            if (poolManager) {
-                poolManager.markProviderUnhealthy(currentConfig.MODEL_PROVIDER, {
-                    uuid: currentConfig.uuid
-                });
-            }
-            return;
-        }
         
         // Health check endpoint
         if (method === 'GET' && path === '/health') {
@@ -165,6 +147,30 @@ export function createRequestHandler(config, providerPoolManager) {
                 message: 'Token counting is not supported'
             }));
             return true;
+        }
+
+        // 获取或选择 API Service 实例 (仅用于 Ollama 端点)
+        let apiService;
+        const needsApiService = (method === 'GET' && path === '/api/tags') ||
+                               (method === 'POST' && path === '/api/chat') ||
+                               (method === 'POST' && path === '/api/generate');
+        
+        if (needsApiService) {
+            try {
+                console.log(`[Service] Getting API service for provider: ${currentConfig.MODEL_PROVIDER}`);
+                apiService = await getApiService(currentConfig);
+                console.log(`[Service] ✓ API service obtained successfully`);
+            } catch (error) {
+                console.error(`[Service] ✗ Failed to get API service: ${error.message}`);
+                handleError(res, { statusCode: 500, message: `Failed to get API service: ${error.message}` });
+                const poolManager = getProviderPoolManager();
+                if (poolManager) {
+                    poolManager.markProviderUnhealthy(currentConfig.MODEL_PROVIDER, {
+                        uuid: currentConfig.uuid
+                    });
+                }
+                return;
+            }
         }
 
         // Handle Ollama endpoints that need apiService (before auth check)
@@ -194,7 +200,7 @@ export function createRequestHandler(config, providerPoolManager) {
         }
 
         try {
-            // Handle API requests
+            // Handle API requests (apiService will be null for content generation requests, which is fine)
             const apiHandled = await handleAPIRequests(method, path, req, res, currentConfig, apiService, providerPoolManager, PROMPT_LOG_FILENAME);
             if (apiHandled) return;
 
