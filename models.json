@@ -21,9 +21,14 @@
       "description": "OpenAI Responses API - 使用 /responses 端点",
       "models": [
         {
-          "id": "openai-responses-A",
-          "name": "OpenAI Responses Model A",
-          "description": "自定义 OpenAI Responses 模型 A"
+          "id": "gpt-5.1-codex",
+          "name": "gpt-5.1-codex",
+          "description": "gpt-5.1-codex"
+        },
+        {
+          "id": "gpt-5.1",
+          "name": "gpt-5.1",
+          "description": "gpt-5.1"
         }
       ]
     },
@@ -96,14 +101,14 @@
       "description": "Anthropic Claude 提供商 - 直接访问 Claude API",
       "models": [
         {
-          "id": "claude-sonnet-4-20250514",
-          "name": "Claude Sonnet 4 (2025-05-14)",
-          "description": "Claude Sonnet 4.0 版本"
+          "id": "claude-sonnet-4-5-20250929",
+          "name": "claude-sonnet-4-5-20250929",
+          "description": "claude-sonnet-4-5-20250929"
         },
         {
-          "id": "claude-opus-4-20250514",
-          "name": "Claude Opus 4 (2025-05-14)",
-          "description": "Claude Opus 4.0 版本"
+          "id": "claude-haiku-4-5-20251001",
+          "name": "claude-haiku-4-5-20251001",
+          "description": "claude-haiku-4-5-20251001"
         }
       ]
     },

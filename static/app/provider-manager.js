@@ -106,12 +106,12 @@ function renderProviders(providers) {
     // 定义所有支持的提供商显示顺序
     // 先 CLI（按字母顺序），再其他（按字母顺序）
     const providerDisplayOrder = [
-        'gemini-cli-oauth',      // Gemini CLI
-        'claude-kiro-oauth',     // Kiro CLI
-        'openai-qwen-oauth',     // Qwen CLI
-        'claude-custom',         // Claude
         'openai-custom',         // OpenAI Chat
-        'openaiResponses-custom' // OpenAI Responses
+        'openaiResponses-custom', // OpenAI Responses
+        'claude-custom',         // Claude
+        'gemini-cli-oauth',      // Gemini CLI
+        'openai-qwen-oauth',     // Qwen CLI
+        'claude-kiro-oauth'     // Kiro
     ];
     
     // 获取所有提供商类型并按指定顺序排序

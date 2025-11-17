@@ -60,15 +60,14 @@ class ModelsManager {
 
         const providers = this.modelsData.providers || {};
         
-        // 定义提供商显示顺序，与提供商池管理保持一致
         // 先 CLI（按字母顺序），再其他（按字母顺序）
         const providerDisplayOrder = [
-            'gemini-cli',        // Gemini CLI
-            'claude-kiro',       // Kiro CLI
-            'qwen-api',          // Qwen CLI
-            'claude-custom',     // Claude
             'openai-custom',     // OpenAI Chat
-            'openai-responses'   // OpenAI Responses
+            'openai-responses',   // OpenAI Responses
+            'claude-custom',    // Claude
+            'gemini-cli',        // Gemini CLI
+            'qwen-api',          // Qwen CLI
+            'claude-kiro'       // Kiro
         ];
         
         // 获取所有提供商并按指定顺序排序
