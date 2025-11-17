@@ -61,33 +61,38 @@ export class ProviderPoolManager {
      * @returns {object|null} The selected provider's configuration, or null if no healthy provider is found.
      */
     selectProvider(providerType, preferredUuid = null, requestedModel = null) {
+        console.log(`[ProviderPoolManager] selectProvider called - providerType: ${providerType}, requestedModel: ${requestedModel}, preferredUuid: ${preferredUuid}`);
+        
         const availableProviders = this.providerStatus[providerType] || [];
         
         // 过滤健康且启用的提供商，如果请求的是 openai-custom 模型，要检查映射
         const availableAndHealthyProviders = availableProviders.filter(p => {
             if (!p.config.isHealthy || p.config.isDisabled) {
+                console.log(`[ProviderPoolManager] Skipping ${p.uuid} (${p.config.vendorName || 'unknown'}): unhealthy or disabled`);
                 return false;
             }
 
-            // openai-custom 类型模型映射逻辑
+            // openai-custom 类型必须配置 modelMapping，并且必须有对应模型的映射
             if (providerType === 'openai-custom' && requestedModel) {
-                // 如果提供商配置了 modelMapping，检查映射是否存在，否则跳过
-                if (p.config.modelMapping) {
-                    if (!p.config.modelMapping[requestedModel]) {
-                        console.log(`[ProviderPoolManager] Skipping ${p.uuid}: No mapping for requested model ${requestedModel}`);
-                        return false;
-                    }
-                } else {
-                    // 未配置映射，则跳过
-                    console.log(`[ProviderPoolManager] Skipping ${p.uuid}: No modelMapping configured`);
+                // 如果没有配置 modelMapping，跳过该供应商
+                if (!p.config.modelMapping) {
+                    console.log(`[ProviderPoolManager] Skipping ${p.uuid} (${p.config.vendorName || 'unknown'}): No modelMapping configured`);
                     return false;
                 }
+                
+                // 如果配置了 modelMapping，但没有请求模型的映射，跳过该供应商
+                if (!p.config.modelMapping[requestedModel]) {
+                    console.log(`[ProviderPoolManager] Skipping ${p.uuid} (${p.config.vendorName || 'unknown'}): No mapping for requested model ${requestedModel}`);
+                    return false;
+                }
+                
+                console.log(`[ProviderPoolManager] Provider ${p.uuid} (${p.config.vendorName || 'unknown'}) has mapping: ${requestedModel} -> ${p.config.modelMapping[requestedModel]}`);
             }
             
-            // 如果请求的是 openai-chat-X 模型，已有逻辑继续保留
+            // 如果请求的是 openai-chat-X 模型，检查映射
             if (requestedModel && requestedModel.startsWith('openai-chat-')) {
                 if (!p.config.modelMapping || !p.config.modelMapping[requestedModel]) {
-                    console.log(`[ProviderPoolManager] Skipping ${p.uuid}: No mapping for ${requestedModel}`);
+                    console.log(`[ProviderPoolManager] Skipping ${p.uuid} (${p.config.vendorName || 'unknown'}): No mapping for ${requestedModel}`);
                     return false;
                 }
             }
@@ -95,70 +100,44 @@ export class ProviderPoolManager {
             return true;
         });
 
-
         if (availableAndHealthyProviders.length === 0) {
-
-            console.warn(`[ProviderPoolManager] No available and healthy providers for type: ${providerType}`);
-
+            console.warn(`[ProviderPoolManager] No available and healthy providers for type: ${providerType}, requestedModel: ${requestedModel}`);
             return null;
-
         }
-
-
 
         const normalizedPreferredUuid = preferredUuid ? preferredUuid.toLowerCase() : null;
 
         if (normalizedPreferredUuid) {
-
             const preferredProvider = availableAndHealthyProviders.find(p => (p.uuid || '').toLowerCase() === normalizedPreferredUuid);
 
             if (preferredProvider) {
-
                 preferredProvider.config.lastUsed = new Date().toISOString();
-
                 preferredProvider.config.usageCount++;
-
-                console.log(`[ProviderPoolManager] Selected preferred provider for ${providerType}: ${preferredProvider.uuid}`);
+                
+                const mappedModel = preferredProvider.config.modelMapping?.[requestedModel] || requestedModel;
+                console.log(`[ProviderPoolManager] ✓ Selected preferred provider: ${preferredProvider.config.vendorName || 'unknown'} (${preferredProvider.uuid}), model mapping: ${requestedModel} -> ${mappedModel}`);
 
                 this._debouncedSave(providerType);
-
                 return preferredProvider.config;
-
             }
 
             console.warn(`[ProviderPoolManager] Preferred provider ${preferredUuid} not available for ${providerType}, falling back to round-robin`);
-
         }
 
-
-
         const currentIndex = this.roundRobinIndex[providerType] || 0;
-
         const providerIndex = currentIndex % availableAndHealthyProviders.length;
-
         const selected = availableAndHealthyProviders[providerIndex];
 
-
-
         this.roundRobinIndex[providerType] = (providerIndex + 1) % availableAndHealthyProviders.length;
-
         selected.config.lastUsed = new Date().toISOString();
-
         selected.config.usageCount++;
 
-
-
-        console.log(`[ProviderPoolManager] Selected provider for ${providerType} (round-robin): ${JSON.stringify(selected.config)}`);
-
-
+        const mappedModel = selected.config.modelMapping?.[requestedModel] || requestedModel;
+        console.log(`[ProviderPoolManager] ✓ Selected provider (round-robin): ${selected.config.vendorName || 'unknown'} (${selected.uuid}), model mapping: ${requestedModel} -> ${mappedModel}`);
 
         this._debouncedSave(providerType);
-
         return selected.config;
-
     }
-
-
 
     /**
      * Marks a provider as unhealthy (e.g., after an API error).

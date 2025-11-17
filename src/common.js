@@ -828,7 +828,7 @@ export async function handleContentGenerationRequest(req, res, service, endpoint
     await logConversation('input', promptText, CONFIG.PROMPT_LOG_MODE, PROMPT_LOG_FILENAME);
     
     // 6. Get the correct service for the selected provider
-    const correctService = await getApiService({ ...CONFIG, MODEL_PROVIDER: toProvider, uuid: selectedProviderUuid }, providerPoolManager);
+    const correctService = await getApiService({ ...CONFIG, MODEL_PROVIDER: toProvider, uuid: selectedProviderUuid, requestedModel: model }, providerPoolManager);
     
     // 7. Call the appropriate stream or unary handler, passing the provider info.
     if (isStream) {
