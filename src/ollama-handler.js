@@ -43,9 +43,11 @@ export async function handleOllamaTags(req, res, apiService, currentConfig, prov
         if (providerPoolManager?.providerPools) {
             const { getServiceAdapter } = await import('./adapter.js');
             
-            for (const [providerType, providers] of Object.entries(providerPoolManager.providerPools)) {
+            for (const [providerType, poolData] of Object.entries(providerPoolManager.providerPools)) {
                 if (providerType === currentConfig.MODEL_PROVIDER) continue;
                 
+                // 兼容新旧格式：提取 providers 数组
+                const providers = Array.isArray(poolData) ? poolData : (poolData.providers || []);
                 const healthyProvider = providers.find(p => p.isHealthy);
                 if (healthyProvider) {
                     const tempConfig = { ...currentConfig, ...healthyProvider, MODEL_PROVIDER: providerType };

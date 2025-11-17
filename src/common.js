@@ -819,31 +819,23 @@ export async function handleContentGenerationRequest(req, res, service, endpoint
     
     const providerSelection = getProviderByModelName(rawModel, providerPoolManager, fallbackProvider);
     const toProvider = providerSelection.providerType || fallbackProvider;
-    const selectedProviderUuid = providerSelection.providerConfig?.uuid;
+    // Don't use the UUID from prefix-based selection as preferred UUID
+    // This would bypass the round-robin pool selection logic
     const selectedProviderConfig = providerSelection.providerConfig;
-    
-    console.log(`[Provider Selection Debug] Selected provider config:`, {
-        uuid: selectedProviderConfig?.uuid,
-        vendorName: selectedProviderConfig?.vendorName,
-        hasModelMapping: !!selectedProviderConfig?.modelMapping
-    });
     
     // Remove prefix from model name before sending to backend
     let model = removeModelPrefix(rawModel);
     
-    // 3. Apply model mapping for openai-custom providers
-    if (toProvider === 'openai-custom' && selectedProviderConfig && selectedProviderConfig.modelMapping) {
-        const mappedModel = selectedProviderConfig.modelMapping[model];
-        if (mappedModel) {
-            console.log(`[Model Mapping] Mapping ${model} -> ${mappedModel} for provider ${selectedProviderUuid}`);
-            model = mappedModel;
-        } else {
-            console.warn(`[Model Mapping] No mapping found for model ${model} in provider ${selectedProviderUuid}`);
-        }
-    }
-    
-    console.log(`[Model Processing] Raw model: ${rawModel}, Clean model: ${model}`);
-    console.log(`[Provider Selection] Model: ${model}, Selected provider: ${toProvider}${selectedProviderUuid ? ` (uuid: ${selectedProviderUuid})` : ''}`);
+    console.log(`[Provider Selection] Raw model: ${rawModel}, Clean model: ${model}`);
+    console.log(`[Provider Selection] Provider selection result:`, {
+        providerType: toProvider,
+        hasProviderConfig: !!selectedProviderConfig,
+        uuid: selectedProviderConfig?.uuid,
+        vendorName: selectedProviderConfig?.vendorName,
+        hasModelMapping: !!selectedProviderConfig?.modelMapping
+    });
+    console.log(`[Provider Selection] Selected provider type: ${toProvider}, will use round-robin selection`);
+    console.log(`[Provider Selection] Will pass requestedModel="${model}" to provider pool manager for filtering`);
 
     // 3. Convert request body from client format to backend format, if necessary.
     let processedRequestBody = originalRequestBody;
@@ -866,7 +858,9 @@ export async function handleContentGenerationRequest(req, res, service, endpoint
     await logConversation('input', promptText, CONFIG.PROMPT_LOG_MODE, PROMPT_LOG_FILENAME);
     
     // 6. Get the correct service for the selected provider
-    const correctService = await getApiService({ ...CONFIG, MODEL_PROVIDER: toProvider, uuid: selectedProviderUuid, requestedModel: model }, providerPoolManager);
+    // Note: We don't pass uuid here to enable round-robin selection
+    // The pool manager will select a provider based on requestedModel filtering
+    const correctService = await getApiService({ ...CONFIG, MODEL_PROVIDER: toProvider, requestedModel: model }, providerPoolManager);
     
     // Log detailed request information
     // Extract baseUrl and config from the underlying service based on provider type

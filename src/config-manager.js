@@ -178,9 +178,11 @@ export async function initializeConfig(args = process.argv.slice(2), configFileP
             
             // 自动检测可用的提供商类型
             const availableProviders = [];
-            for (const [providerType, providers] of Object.entries(currentConfig.providerPools)) {
+            for (const [providerType, poolData] of Object.entries(currentConfig.providerPools)) {
+                // 兼容新旧格式：提取 providers 数组
+                const providers = Array.isArray(poolData) ? poolData : (poolData.providers || []);
                 // 检查该类型是否有提供商配置（不管健康状态）
-                if (Array.isArray(providers) && providers.length > 0) {
+                if (providers.length > 0) {
                     availableProviders.push(providerType);
                     console.log(`[Config] Found provider type: ${providerType} with ${providers.length} credential(s)`);
                 }

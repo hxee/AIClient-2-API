@@ -1750,16 +1750,53 @@ export function initializeUIManagement(config) {
         global.logBuffer = [];
     }
 
+    // 处理参数并过滤HTML内容
+    const processArgs = (args, maxLength) => {
+        return args.map(arg => {
+            let str;
+            if (typeof arg === 'string') {
+                str = arg;
+            } else if (arg instanceof Error) {
+                str = arg.stack || arg.message || String(arg);
+            } else if (typeof arg === 'object' && arg !== null) {
+                try {
+                    str = JSON.stringify(arg);
+                } catch (e) {
+                    str = String(arg);
+                }
+            } else {
+                str = String(arg);
+            }
+
+            // 检测并过滤HTML内容
+            if (str.includes('<!DOCTYPE') ||
+                str.includes('<html') ||
+                str.includes('</html>') ||
+                (str.includes('<head>') && str.includes('<body>')) ||
+                (str.length > 1000 && /<[a-z][\s\S]*>/i.test(str))) {
+                return '[HTML Response - truncated for readability]';
+            }
+
+            // 限制长度
+            if (str.length > maxLength) {
+                return str.substring(0, maxLength) + '... [truncated]';
+            }
+
+            return str;
+        });
+    };
+
     // Override console.log to broadcast logs
     const originalLog = console.log;
     console.log = function(...args) {
+        const processedArgs = processArgs(args, 5000);
         // 立即刷新标准输出，避免缓冲导致卡顿
-        originalLog.apply(console, args);
+        originalLog.apply(console, processedArgs);
         if (process.stdout.write('')) {
             // Force flush stdout to prevent buffering issues
         }
         
-        const message = args.map(arg => typeof arg === 'string' ? arg : JSON.stringify(arg)).join(' ');
+        const message = processedArgs.join(' ');
         const logEntry = {
             timestamp: new Date().toISOString(),
             level: 'info',
@@ -1779,13 +1816,14 @@ export function initializeUIManagement(config) {
     // Override console.error to broadcast errors
     const originalError = console.error;
     console.error = function(...args) {
+        const processedArgs = processArgs(args, 3000);
         // 立即刷新标准错误输出
-        originalError.apply(console, args);
+        originalError.apply(console, processedArgs);
         if (process.stderr.write('')) {
             // Force flush stderr to prevent buffering issues
         }
         
-        const message = args.map(arg => typeof arg === 'string' ? arg : JSON.stringify(arg)).join(' ');
+        const message = processedArgs.join(' ');
         const logEntry = {
             timestamp: new Date().toISOString(),
             level: 'error',
