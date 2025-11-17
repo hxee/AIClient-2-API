@@ -270,10 +270,21 @@ export function findMatchingProviderKey(alias, vendor, providerPools) {
     const candidateProviderTypes = ALIAS_TO_PROVIDER_TYPES[alias] || [];
     const availableKeys = candidateProviderTypes.length > 0 ? candidateProviderTypes : Object.keys(providerPools);
     
+    // Helper function to get providers array from pool entry (handles both array and object format)
+    const getProvidersArray = (poolEntry) => {
+        if (!poolEntry) return [];
+        // If it's an object with providers property (new format), return providers array
+        if (typeof poolEntry === 'object' && !Array.isArray(poolEntry) && poolEntry.providers) {
+            return Array.isArray(poolEntry.providers) ? poolEntry.providers : [];
+        }
+        // If it's already an array (old format), return as-is
+        return Array.isArray(poolEntry) ? poolEntry : [];
+    };
+    
     if (vendor) {
         const normalizedVendor = normalize(vendor);
         for (const key of availableKeys) {
-            const providers = providerPools[key] || [];
+            const providers = getProvidersArray(providerPools[key]);
             const matchedProvider = providers.find(p =>
                 normalize(p.vendorName) === normalizedVendor &&
                 !p.isDisabled &&
@@ -287,7 +298,7 @@ export function findMatchingProviderKey(alias, vendor, providerPools) {
     }
     
     for (const key of availableKeys) {
-        const providers = providerPools[key] || [];
+        const providers = getProvidersArray(providerPools[key]);
         const healthyProvider = providers.find(p => p.isHealthy && !p.isDisabled);
         if (healthyProvider) {
             console.log(`[Provider Selection] Alias match found: ${alias} -> ${key}`);
@@ -859,24 +870,23 @@ export async function handleContentGenerationRequest(req, res, service, endpoint
     let baseUrl = 'N/A';
     let actualVendorName = 'unknown';
     let actualConfig = null;
+    let userAgent = 'N/A';
     
     if (correctService.openAIApiService) {
         baseUrl = correctService.openAIApiService.baseUrl;
         actualConfig = correctService.openAIApiService.config;
         actualVendorName = actualConfig?.vendorName || 'unknown';
-        console.log(`[Debug] OpenAI Service config:`, {
-            vendorName: actualConfig?.vendorName,
-            uuid: actualConfig?.uuid,
-            hasVendorName: !!actualConfig?.vendorName
-        });
+        userAgent = actualConfig?.userAgent || 'N/A';
     } else if (correctService.openAIResponsesApiService) {
         baseUrl = correctService.openAIResponsesApiService.baseUrl;
         actualConfig = correctService.openAIResponsesApiService.config;
         actualVendorName = actualConfig?.vendorName || 'unknown';
+        userAgent = actualConfig?.userAgent || 'N/A';
     } else if (correctService.claudeApiService) {
         baseUrl = correctService.claudeApiService.baseUrl;
         actualConfig = correctService.claudeApiService.config;
         actualVendorName = actualConfig?.vendorName || 'unknown';
+        userAgent = actualConfig?.userAgent || 'N/A';
     } else if (correctService.geminiApiService) {
         baseUrl = 'Google Cloud API (OAuth)';
         actualConfig = correctService.geminiApiService.config;
@@ -898,6 +908,7 @@ export async function handleContentGenerationRequest(req, res, service, endpoint
     console.log(`[Request] Vendor Name: ${actualVendorName}`);
     console.log(`[Request] Provider UUID: ${actualUuid}`);
     console.log(`[Request] Base URL: ${baseUrl}`);
+    console.log(`[Request] User-Agent: ${userAgent}`);
     console.log(`[Request] Model: ${model}`);
     console.log(`[Request] Stream: ${isStream}`);
     console.log(`==================================\n`);

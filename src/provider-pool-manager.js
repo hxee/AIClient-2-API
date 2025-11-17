@@ -30,7 +30,21 @@ export class ProviderPoolManager {
         for (const providerType in this.providerPools) {
             this.providerStatus[providerType] = [];
             this.roundRobinIndex[providerType] = 0; // Initialize round-robin index for each type
-            this.providerPools[providerType].forEach((providerConfig) => {
+            
+            const poolData = this.providerPools[providerType];
+            let providers = [];
+            let channelUserAgent = null;
+            
+            // 检查是否是新格式（包含 userAgent 和 providers）
+            if (poolData && typeof poolData === 'object' && !Array.isArray(poolData)) {
+                channelUserAgent = poolData.userAgent || null;
+                providers = poolData.providers || [];
+            } else if (Array.isArray(poolData)) {
+                // 旧格式，直接是数组
+                providers = poolData;
+            }
+            
+            providers.forEach((providerConfig) => {
                 // Ensure initial health and usage stats are present in the config
                 providerConfig.isHealthy = providerConfig.isHealthy !== undefined ? providerConfig.isHealthy : true;
                 providerConfig.isDisabled = providerConfig.isDisabled !== undefined ? providerConfig.isDisabled : false;
@@ -42,6 +56,11 @@ export class ProviderPoolManager {
                 providerConfig.lastErrorTime = providerConfig.lastErrorTime instanceof Date
                     ? providerConfig.lastErrorTime.toISOString()
                     : (providerConfig.lastErrorTime || null);
+                
+                // 如果渠道有 userAgent 配置，添加到每个供应商配置中
+                if (channelUserAgent) {
+                    providerConfig.userAgent = channelUserAgent;
+                }
 
                 this.providerStatus[providerType].push({
                     config: providerConfig,
@@ -414,7 +433,7 @@ export class ProviderPoolManager {
             }
 
             if (this.providerStatus[providerTypeToUpdate]) {
-                currentPools[providerTypeToUpdate] = this.providerStatus[providerTypeToUpdate].map(p => {
+                const providersToSave = this.providerStatus[providerTypeToUpdate].map(p => {
                     // Convert Date objects to ISOString if they exist
                     if (p.config.lastUsed instanceof Date) {
                         p.config.lastUsed = p.config.lastUsed.toISOString();
@@ -422,8 +441,25 @@ export class ProviderPoolManager {
                     if (p.config.lastErrorTime instanceof Date) {
                         p.config.lastErrorTime = p.config.lastErrorTime.toISOString();
                     }
-                    return p.config;
+                    
+                    // 移除 userAgent，因为它是渠道级别的配置，不应该保存在每个供应商中
+                    const configCopy = { ...p.config };
+                    delete configCopy.userAgent;
+                    return configCopy;
                 });
+                
+                // 检查原始数据是否是新格式（包含 userAgent）
+                const originalData = currentPools[providerTypeToUpdate];
+                if (originalData && typeof originalData === 'object' && !Array.isArray(originalData) && originalData.userAgent) {
+                    // 保持新格式：包含 userAgent 和 providers
+                    currentPools[providerTypeToUpdate] = {
+                        userAgent: originalData.userAgent,
+                        providers: providersToSave
+                    };
+                } else {
+                    // 旧格式：直接数组
+                    currentPools[providerTypeToUpdate] = providersToSave;
+                }
             } else {
                 console.warn(`[ProviderPoolManager] Attempted to save unknown providerType: ${providerTypeToUpdate}`);
             }

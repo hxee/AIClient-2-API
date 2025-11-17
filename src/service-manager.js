@@ -39,7 +39,9 @@ export async function initApiService(config) {
             console.warn(`[Initialization Warning] Skipping unknown model provider '${provider}' during adapter initialization.`);
             continue;
         }
-        if (config.providerPools && config.providerPools[provider] && config.providerPools[provider].length > 0) {
+        const poolData = config.providerPools && config.providerPools[provider];
+        const providers = poolData ? (Array.isArray(poolData) ? poolData : (poolData.providers || [])) : [];
+        if (providers.length > 0) {
             // 由号池管理器负责按需初始化
             continue;
         }
@@ -66,7 +68,9 @@ export async function getApiService(config, providerPoolManagerParam = null) {
     const poolManager = providerPoolManagerParam || providerPoolManager;
     let serviceConfig = config;
     
-    if (poolManager && config.providerPools && config.providerPools[config.MODEL_PROVIDER]) {
+    const poolData = config.providerPools && config.providerPools[config.MODEL_PROVIDER];
+    const hasProviders = poolData && (Array.isArray(poolData) ? poolData.length > 0 : (poolData.providers && poolData.providers.length > 0));
+    if (poolManager && hasProviders) {
         console.log(`[Service Manager] Found pool for ${config.MODEL_PROVIDER}, selecting from pool...`);
         // 如果有号池管理器，并且当前模型提供者类型有对应的号池，则从号池中选择一个提供者配置
         // 传递模型名称用于检查映射配置

@@ -6,6 +6,33 @@ import crypto from 'crypto';
 import { getRequestBody, MODEL_PROVIDER } from './common.js';
 import { CONFIG } from './config-manager.js';
 
+/**
+ * 获取提供商数组（兼容新旧格式）
+ * @param {Array|Object} poolData - 提供商池数据
+ * @returns {Array} 提供商数组
+ */
+function getProvidersArray(poolData) {
+  if (!poolData) return [];
+  return Array.isArray(poolData) ? poolData : (poolData.providers || []);
+}
+
+/**
+ * 设置提供商数组（兼容新旧格式）
+ * @param {Object} providerPools - 提供商池对象
+ * @param {string} providerType - 提供商类型
+ * @param {Array} providers - 提供商数组
+ */
+function setProvidersArray(providerPools, providerType, providers) {
+  const poolData = providerPools[providerType];
+  if (poolData && !Array.isArray(poolData) && typeof poolData === 'object') {
+    // 对象格式，更新 providers 字段
+    poolData.providers = providers;
+  } else {
+    // 数组格式或新建，直接赋值
+    providerPools[providerType] = providers;
+  }
+}
+
 // Token存储在内存中（生产环境建议使用Redis）
 const tokenStore = new Map();
 
@@ -457,10 +484,9 @@ export async function handleUIApiRequests(method, pathParam, req, res, currentCo
                             }
 
                             // 添加新提供商到相应类型
-                            if (!providerPools[providerType]) {
-                                providerPools[providerType] = [];
-                            }
-                            providerPools[providerType].push(providerConfig);
+                            const providers = getProvidersArray(providerPools[providerType]);
+                            providers.push(providerConfig);
+                            setProvidersArray(providerPools, providerType, providers);
 
                             // 保存到文件
                             writeFileSync(filePath, JSON.stringify(providerPools, null, 2), 'utf8');
@@ -697,7 +723,7 @@ export async function handleUIApiRequests(method, pathParam, req, res, currentCo
             console.warn('[UI API] Failed to load provider pools:', error.message);
         }
 
-        const providers = providerPools[providerType] || [];
+        const providers = getProvidersArray(providerPools[providerType]);
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({
             providerType,
@@ -761,10 +787,9 @@ export async function handleUIApiRequests(method, pathParam, req, res, currentCo
             }
 
             // Add new provider to the appropriate type
-            if (!providerPools[providerType]) {
-                providerPools[providerType] = [];
-            }
-            providerPools[providerType].push(providerConfig);
+            const providers = getProvidersArray(providerPools[providerType]);
+            providers.push(providerConfig);
+            setProvidersArray(providerPools, providerType, providers);
 
             // Save to file
             writeFileSync(filePath, JSON.stringify(providerPools, null, 2), 'utf8');
@@ -843,7 +868,7 @@ export async function handleUIApiRequests(method, pathParam, req, res, currentCo
             }
 
             // Find and update the provider
-            const providers = providerPools[providerType] || [];
+            const providers = getProvidersArray(providerPools[providerType]);
             const providerIndex = providers.findIndex(p => p.uuid === providerUuid);
             
             if (providerIndex === -1) {
@@ -864,7 +889,8 @@ export async function handleUIApiRequests(method, pathParam, req, res, currentCo
                 lastErrorTime: existingProvider.lastErrorTime
             };
 
-            providerPools[providerType][providerIndex] = updatedProvider;
+            providers[providerIndex] = updatedProvider;
+            setProvidersArray(providerPools, providerType, providers);
 
             // Save to file
             writeFileSync(filePath, JSON.stringify(providerPools, null, 2), 'utf8');
@@ -924,7 +950,7 @@ export async function handleUIApiRequests(method, pathParam, req, res, currentCo
             }
 
             // Find and remove the provider
-            const providers = providerPools[providerType] || [];
+            const providers = getProvidersArray(providerPools[providerType]);
             const providerIndex = providers.findIndex(p => p.uuid === providerUuid);
             
             if (providerIndex === -1) {
@@ -937,6 +963,7 @@ export async function handleUIApiRequests(method, pathParam, req, res, currentCo
             providers.splice(providerIndex, 1);
 
             // Remove the entire provider type if no providers left
+            setProvidersArray(providerPools, providerType, providers);
             if (providers.length === 0) {
                 delete providerPools[providerType];
             }
@@ -1001,7 +1028,7 @@ export async function handleUIApiRequests(method, pathParam, req, res, currentCo
             }
 
             // Find and update the provider
-            const providers = providerPools[providerType] || [];
+            const providers = getProvidersArray(providerPools[providerType]);
             const providerIndex = providers.findIndex(p => p.uuid === providerUuid);
             
             if (providerIndex === -1) {
@@ -1072,7 +1099,7 @@ export async function handleUIApiRequests(method, pathParam, req, res, currentCo
                 providerPools = JSON.parse(fileContent);
             }
             
-            const providers = providerPools[providerType] || [];
+            const providers = getProvidersArray(providerPools[providerType]);
             const provider = providers.find(p => p.uuid === providerUuid);
             
             if (!provider) {
@@ -1117,7 +1144,7 @@ export async function handleUIApiRequests(method, pathParam, req, res, currentCo
                 providerPools = JSON.parse(fileContent);
             }
             
-            const providers = providerPools[providerType] || [];
+            const providers = getProvidersArray(providerPools[providerType]);
             const providerIndex = providers.findIndex(p => p.uuid === providerUuid);
             
             if (providerIndex === -1) {
@@ -1187,7 +1214,7 @@ export async function handleUIApiRequests(method, pathParam, req, res, currentCo
                 providerPools = JSON.parse(fileContent);
             }
             
-            const providers = providerPools[providerType] || [];
+            const providers = getProvidersArray(providerPools[providerType]);
             const providerIndex = providers.findIndex(p => p.uuid === providerUuid);
             
             if (providerIndex === -1) {
@@ -1558,11 +1585,11 @@ export async function handleUIApiRequests(method, pathParam, req, res, currentCo
                     providerPools = JSON.parse(fileContent);
                     
                     // 遍历所有提供商类型，查找并删除引用该文件的提供商
-                    for (const [providerType, providers] of Object.entries(providerPools)) {
-                        if (!Array.isArray(providers)) continue;
+                    for (const [providerType, poolData] of Object.entries(providerPools)) {
+                        const providers = getProvidersArray(poolData);
                         
                         const originalLength = providers.length;
-                        providerPools[providerType] = providers.filter(provider => {
+                        const filteredProviders = providers.filter(provider => {
                             // 检查所有可能的凭据字段
                             const credentialFields = [
                                 'GEMINI_OAUTH_CREDS_FILE_PATH',
@@ -1792,7 +1819,8 @@ async function scanConfigFiles(currentConfig, providerPoolManager) {
 
     // 检查提供商池文件中的所有OAuth凭据路径 - 标准化路径格式
     if (providerPools) {
-        for (const [providerType, providers] of Object.entries(providerPools)) {
+        for (const [providerType, poolData] of Object.entries(providerPools)) {
+            const providers = getProvidersArray(poolData);
             for (const provider of providers) {
                 // 检查各种可能的凭据字段
                 const credentialFields = [
@@ -1944,8 +1972,10 @@ function getFileUsageInfo(relativePath, fileName, usedPaths, currentConfig) {
     if (currentConfig.providerPools) {
         // 使用 flatMap 将双重循环优化为单层循环 O(n)
         const allProviders = Object.entries(currentConfig.providerPools).flatMap(
-            ([providerType, providers]) =>
-                providers.map((provider, index) => ({ provider, providerType, index }))
+            ([providerType, poolData]) => {
+                const providers = getProvidersArray(poolData);
+                return providers.map((provider, index) => ({ provider, providerType, index }));
+            }
         );
 
         for (const { provider, providerType, index } of allProviders) {

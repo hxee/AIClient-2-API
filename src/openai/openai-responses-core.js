@@ -11,12 +11,20 @@ export class OpenAIResponsesApiService {
         this.apiKey = config.OPENAI_API_KEY;
         this.baseUrl = config.OPENAI_BASE_URL || 'https://api.openai.com/v1';
         // console.log(`[OpenAIResponsesApiService] Base URL: ${JSON.stringify(config)}`);
+        
+        const headers = {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${this.apiKey}`
+        };
+        
+        // Add User-Agent if configured
+        if (config.userAgent) {
+            headers['User-Agent'] = config.userAgent;
+        }
+        
         this.axiosInstance = axios.create({
             baseURL: this.baseUrl,
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${this.apiKey}`
-            }
+            headers: headers
         });
     }
 

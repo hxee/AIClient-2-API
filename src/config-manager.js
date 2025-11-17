@@ -263,7 +263,9 @@ export function logProviderSpecificDetails(provider, config) {
     // Provider credentials are now managed in provider.json
     // Log pool information for load balancing
     if (config.providerPools && config.providerPools[provider]) {
-        const providers = config.providerPools[provider];
+        // 兼容新旧格式：对象格式（自定义渠道）或数组格式（OAuth渠道）
+        const poolData = config.providerPools[provider];
+        const providers = Array.isArray(poolData) ? poolData : (poolData.providers || []);
         const healthyCount = providers.filter(p => p.isHealthy !== false && p.isDisabled !== true).length;
         const totalCount = providers.length;
         

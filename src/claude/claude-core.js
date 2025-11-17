@@ -37,6 +37,11 @@ export class ClaudeApiService {
             },
         };
         
+        // Add User-Agent if configured
+        if (this.config.userAgent) {
+            axiosConfig.headers['User-Agent'] = this.config.userAgent;
+        }
+        
         // 禁用系统代理以避免HTTPS代理错误
         if (!this.useSystemProxy) {
             axiosConfig.proxy = false;

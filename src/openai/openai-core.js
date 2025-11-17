@@ -21,6 +21,11 @@ export class OpenAIApiService {
             },
         };
         
+        // Add User-Agent if configured
+        if (config.userAgent) {
+            axiosConfig.headers['User-Agent'] = config.userAgent;
+        }
+        
         // 禁用系统代理以避免HTTPS代理错误
         if (!this.useSystemProxy) {
             axiosConfig.proxy = false;
