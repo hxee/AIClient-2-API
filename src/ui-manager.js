@@ -697,6 +697,13 @@ export async function handleUIApiRequests(method, pathParam, req, res, currentCo
                 const poolsData = JSON.parse(readFileSync(currentConfig.PROVIDER_FILE_PATH, 'utf-8'));
                 providerPools = poolsData;
             }
+            
+            // 转换为统一的数组格式供前端使用
+            const normalizedPools = {};
+            for (const [providerType, poolData] of Object.entries(providerPools)) {
+                normalizedPools[providerType] = getProvidersArray(poolData);
+            }
+            providerPools = normalizedPools;
         } catch (error) {
             console.warn('[UI API] Failed to load provider pools:', error.message);
         }
@@ -1746,7 +1753,12 @@ export function initializeUIManagement(config) {
     // Override console.log to broadcast logs
     const originalLog = console.log;
     console.log = function(...args) {
+        // 立即刷新标准输出，避免缓冲导致卡顿
         originalLog.apply(console, args);
+        if (process.stdout.write('')) {
+            // Force flush stdout to prevent buffering issues
+        }
+        
         const message = args.map(arg => typeof arg === 'string' ? arg : JSON.stringify(arg)).join(' ');
         const logEntry = {
             timestamp: new Date().toISOString(),
@@ -1757,13 +1769,22 @@ export function initializeUIManagement(config) {
         if (global.logBuffer.length > 100) {
             global.logBuffer.shift();
         }
-        broadcastEvent('log', logEntry);
+        
+        // 使用 setImmediate 异步广播，避免阻塞主线程
+        setImmediate(() => {
+            broadcastEvent('log', logEntry);
+        });
     };
 
     // Override console.error to broadcast errors
     const originalError = console.error;
     console.error = function(...args) {
+        // 立即刷新标准错误输出
         originalError.apply(console, args);
+        if (process.stderr.write('')) {
+            // Force flush stderr to prevent buffering issues
+        }
+        
         const message = args.map(arg => typeof arg === 'string' ? arg : JSON.stringify(arg)).join(' ');
         const logEntry = {
             timestamp: new Date().toISOString(),
@@ -1774,7 +1795,11 @@ export function initializeUIManagement(config) {
         if (global.logBuffer.length > 100) {
             global.logBuffer.shift();
         }
-        broadcastEvent('log', logEntry);
+        
+        // 使用 setImmediate 异步广播，避免阻塞主线程
+        setImmediate(() => {
+            broadcastEvent('log', logEntry);
+        });
     };
 }
 
