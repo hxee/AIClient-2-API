@@ -188,9 +188,14 @@ export async function handleOllamaChat(req, res, apiService, currentConfig, prov
                 try {
                     // Convert backend chunk to Ollama format
                     const ollamaChunk = ollamaConverter.convertStreamChunk(chunk, sourceProtocol, ollamaRequest.model, false);
-                    res.write(JSON.stringify(ollamaChunk) + '\n');
+                    const chunkStr = JSON.stringify(ollamaChunk) + '\n';
+                    res.write(chunkStr);
+                    // 使用 process.stdout.write 实现非阻塞输出
+                    if (process.env.DEBUG_STREAM) {
+                        process.stdout.write(`[Ollama Chat] ${chunkStr}`);
+                    }
                 } catch (chunkError) {
-                    console.error('[Ollama] Error processing chunk:', chunkError);
+                    process.stderr.write(`[Ollama] Error processing chunk: ${chunkError}\n`);
                 }
             }
             
@@ -285,9 +290,14 @@ export async function handleOllamaGenerate(req, res, apiService, currentConfig, 
                 try {
                     // Convert backend chunk to Ollama generate format
                     const ollamaChunk = ollamaConverter.toOllamaGenerateStreamChunk(chunk, ollamaRequest.model, false);
-                    res.write(JSON.stringify(ollamaChunk) + '\n');
+                    const chunkStr = JSON.stringify(ollamaChunk) + '\n';
+                    res.write(chunkStr);
+                    // 使用 process.stdout.write 实现非阻塞输出
+                    if (process.env.DEBUG_STREAM) {
+                        process.stdout.write(`[Ollama Generate] ${chunkStr}`);
+                    }
                 } catch (chunkError) {
-                    console.error('[Ollama] Error processing chunk:', chunkError);
+                    process.stderr.write(`[Ollama] Error processing chunk: ${chunkError}\n`);
                 }
             }
             

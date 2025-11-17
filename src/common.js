@@ -505,6 +505,10 @@ export async function handleStreamRequest(res, service, model, requestBody, from
             const chunkText = extractResponseText(nativeChunk, toProvider);
             if (chunkText && !Array.isArray(chunkText)) {
                 fullResponseText += chunkText;
+                // 使用非阻塞的 stdout 写入来实时显示流式内容
+                if (process.stdout.isTTY) {
+                    process.stdout.write(chunkText);
+                }
             }
 
             // Convert the complete chunk object to the client's format (fromProvider), if necessary.
@@ -524,22 +528,32 @@ export async function handleStreamRequest(res, service, model, requestBody, from
                     // fullOldResponseJson += chunk.type+"\n";
                     // fullResponseJson += chunk.type+"\n";
                     res.write(`event: ${chunk.type}\n`);
-                    // console.log(`event: ${chunk.type}\n`);
+                    // 使用 process.stdout.write 代替 console.log 实现非阻塞输出
+                    if (process.env.DEBUG_STREAM) {
+                        process.stdout.write(`event: ${chunk.type}\n`);
+                    }
                 }
 
                 // fullOldResponseJson += JSON.stringify(chunk)+"\n";
                 // fullResponseJson += JSON.stringify(chunk)+"\n\n";
                 res.write(`data: ${JSON.stringify(chunk)}\n\n`);
-                // console.log(`data: ${JSON.stringify(chunk)}\n`);
+                // 使用 process.stdout.write 代替 console.log 实现非阻塞输出
+                if (process.env.DEBUG_STREAM) {
+                    process.stdout.write(`data: ${JSON.stringify(chunk)}\n`);
+                }
             }
         }
         if (openStop && needsConversion) {
             res.write(`data: ${JSON.stringify(getOpenAIStreamChunkStop(model))}\n\n`);
-            // console.log(`data: ${JSON.stringify(getOpenAIStreamChunkStop(model))}\n`);
+            // 使用 process.stdout.write 代替 console.log 实现非阻塞输出
+            if (process.env.DEBUG_STREAM) {
+                process.stdout.write(`data: ${JSON.stringify(getOpenAIStreamChunkStop(model))}\n`);
+            }
         }
 
     }  catch (error) {
-        console.error('\n[Server] Error during stream processing:', error.stack);        // Skip marking providers unhealthy on stream errors to avoid disabling entire pools
+        // 使用 process.stderr.write 代替 console.error 实现非阻塞错误输出
+        process.stderr.write(`\n[Server] Error during stream processing: ${error.stack}\n`);
 
         if (!res.writableEnded) {
             const errorPayload = { error: { message: "An error occurred during streaming.", details: error.message } };
@@ -550,6 +564,10 @@ export async function handleStreamRequest(res, service, model, requestBody, from
     } finally {
         if (!responseClosed) {
             res.end();
+        }
+        // 在流结束后输出换行符
+        if (process.stdout.isTTY && fullResponseText) {
+            process.stdout.write('\n');
         }
         await logConversation('output', fullResponseText, PROMPT_LOG_MODE, PROMPT_LOG_FILENAME);
         // fs.writeFile('oldResponseChunk'+Date.now()+'.json', fullOldResponseJson);
