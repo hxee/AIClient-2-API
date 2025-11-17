@@ -659,7 +659,10 @@ export async function handleModelListRequest(req, res, service, endpointType, CO
         console.log(`[ModelList] Configured providers in provider.json:`, Object.keys(providerPoolManager.providerPools));
         
         // Iterate through provider pools and add models from models.json
-        for (const [providerType, providers] of Object.entries(providerPoolManager.providerPools)) {
+        for (const [providerType, poolData] of Object.entries(providerPoolManager.providerPools)) {
+            // 兼容新旧格式：提取 providers 数组
+            const providers = Array.isArray(poolData) ? poolData : (poolData.providers || []);
+            
             // Find healthy and enabled providers
             const healthyProviders = providers.filter(p => p.isHealthy && !p.isDisabled);
             
