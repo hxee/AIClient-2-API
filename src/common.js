@@ -95,12 +95,6 @@ const PROVIDER_ALIAS = {
     [MODEL_PROVIDER.CLAUDE_CUSTOM]: 'claude',
 };
 
-const PROVIDER_VENDOR_REQUIRED = new Set([
-    MODEL_PROVIDER.OPENAI_CUSTOM,
-    MODEL_PROVIDER.OPENAI_CUSTOM_RESPONSES,
-    MODEL_PROVIDER.CLAUDE_CUSTOM
-]);
-
 const ALIAS_TO_PROVIDER_TYPES = Object.entries(PROVIDER_ALIAS).reduce((map, [providerType, alias]) => {
     if (!alias) return map;
     const key = alias.toLowerCase();
@@ -130,14 +124,6 @@ export function getProtocolPrefix(provider) {
  * @param {string} provider - Provider type
  * @returns {string} Model name with prefix
  */
-function sanitizeVendorName(name) {
-    return (name || '')
-        .replace(/[\[\]\s]+/g, '-')
-        .replace(/[^a-zA-Z0-9_-]/g, '-')
-        .replace(/-+/g, '-')
-        .trim();
-}
-
 export function addModelPrefix(modelName, provider, options = {}) {
     if (!modelName) return modelName;
     
@@ -146,7 +132,7 @@ export function addModelPrefix(modelName, provider, options = {}) {
         return modelName;
     }
     
-    const { vendorName } = options;
+    // Use alias from PROVIDER_ALIAS directly, without adding vendorName
     const alias = PROVIDER_ALIAS[provider];
     
     let prefixText = alias || '';
@@ -156,13 +142,6 @@ export function addModelPrefix(modelName, provider, options = {}) {
             prefixText = dynamic.replace(/^\[|\]$/g, '').toLowerCase();
         } else {
             prefixText = provider;
-        }
-    }
-    
-    if (PROVIDER_VENDOR_REQUIRED.has(provider) && vendorName) {
-        const sanitizedVendor = sanitizeVendorName(vendorName).toLowerCase();
-        if (sanitizedVendor) {
-            prefixText = `${prefixText}-${sanitizedVendor}`;
         }
     }
     
@@ -731,38 +710,6 @@ export async function handleModelListRequest(req, res, service, endpointType, CO
                 
                 // Add provider prefixes
                 formattedModels = addPrefixToModels(formattedModels, providerType, format, healthyProvider);
-                
-                // 修改 chat 模型显示名称：去掉 "-供应商" 后缀，只保留 "chat"
-                if (providerType.includes('openai') || providerType.includes('qwen')) {
-                    formattedModels = formattedModels.map(model => {
-                        if (format === 'openai' && model.id) {
-                            // 匹配 [xxx] 格式的前缀
-                            const match = model.id.match(/^(\[.*?\])\s+(.+)$/);
-                            if (match) {
-                                const prefix = match[1];
-                                const modelName = match[2];
-                                // 如果前缀包含 "chat-" 或以 "chat-" 开头，简化为 [chat]
-                                if (prefix.toLowerCase().includes('chat-')) {
-                                    model.id = `[chat] ${modelName}`;
-                                }
-                            }
-                        } else if (model.name) {
-                            // Gemini format
-                            const match = model.name.match(/^(\[.*?\])\s+(.+)$/);
-                            if (match) {
-                                const prefix = match[1];
-                                const modelName = match[2];
-                                if (prefix.toLowerCase().includes('chat-')) {
-                                    model.name = `[chat] ${modelName}`;
-                                    if (model.displayName) {
-                                        model.displayName = `[chat] ${modelName}`;
-                                    }
-                                }
-                            }
-                        }
-                        return model;
-                    });
-                }
                 
                 allModels.push(...formattedModels);
                 console.log(`[ModelList] ✓ Added ${formattedModels.length} models from ${providerType}`);
