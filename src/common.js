@@ -808,6 +808,12 @@ export async function handleContentGenerationRequest(req, res, service, endpoint
     const selectedProviderUuid = providerSelection.providerConfig?.uuid;
     const selectedProviderConfig = providerSelection.providerConfig;
     
+    console.log(`[Provider Selection Debug] Selected provider config:`, {
+        uuid: selectedProviderConfig?.uuid,
+        vendorName: selectedProviderConfig?.vendorName,
+        hasModelMapping: !!selectedProviderConfig?.modelMapping
+    });
+    
     // Remove prefix from model name before sending to backend
     let model = removeModelPrefix(rawModel);
     
@@ -849,12 +855,48 @@ export async function handleContentGenerationRequest(req, res, service, endpoint
     const correctService = await getApiService({ ...CONFIG, MODEL_PROVIDER: toProvider, uuid: selectedProviderUuid, requestedModel: model }, providerPoolManager);
     
     // Log detailed request information
-    const baseUrl = correctService.baseUrl || 'unknown';
-    const vendorName = selectedProviderConfig?.vendorName || 'unknown';
+    // Extract baseUrl and config from the underlying service based on provider type
+    let baseUrl = 'N/A';
+    let actualVendorName = 'unknown';
+    let actualConfig = null;
+    
+    if (correctService.openAIApiService) {
+        baseUrl = correctService.openAIApiService.baseUrl;
+        actualConfig = correctService.openAIApiService.config;
+        actualVendorName = actualConfig?.vendorName || 'unknown';
+        console.log(`[Debug] OpenAI Service config:`, {
+            vendorName: actualConfig?.vendorName,
+            uuid: actualConfig?.uuid,
+            hasVendorName: !!actualConfig?.vendorName
+        });
+    } else if (correctService.openAIResponsesApiService) {
+        baseUrl = correctService.openAIResponsesApiService.baseUrl;
+        actualConfig = correctService.openAIResponsesApiService.config;
+        actualVendorName = actualConfig?.vendorName || 'unknown';
+    } else if (correctService.claudeApiService) {
+        baseUrl = correctService.claudeApiService.baseUrl;
+        actualConfig = correctService.claudeApiService.config;
+        actualVendorName = actualConfig?.vendorName || 'unknown';
+    } else if (correctService.geminiApiService) {
+        baseUrl = 'Google Cloud API (OAuth)';
+        actualConfig = correctService.geminiApiService.config;
+        actualVendorName = actualConfig?.vendorName || 'gemini-cli';
+    } else if (correctService.kiroApiService) {
+        baseUrl = 'Kiro API (OAuth)';
+        actualConfig = correctService.kiroApiService.config;
+        actualVendorName = actualConfig?.vendorName || 'kiro';
+    } else if (correctService.qwenApiService) {
+        baseUrl = 'Qwen API (OAuth)';
+        actualConfig = correctService.qwenApiService.config;
+        actualVendorName = actualConfig?.vendorName || 'qwen';
+    }
+    
+    const actualUuid = actualConfig?.uuid || selectedProviderUuid || 'N/A';
+    
     console.log(`\n========== REQUEST INFO ==========`);
     console.log(`[Request] Provider Type: ${toProvider}`);
-    console.log(`[Request] Vendor Name: ${vendorName}`);
-    console.log(`[Request] Provider UUID: ${selectedProviderUuid || 'N/A'}`);
+    console.log(`[Request] Vendor Name: ${actualVendorName}`);
+    console.log(`[Request] Provider UUID: ${actualUuid}`);
     console.log(`[Request] Base URL: ${baseUrl}`);
     console.log(`[Request] Model: ${model}`);
     console.log(`[Request] Stream: ${isStream}`);
