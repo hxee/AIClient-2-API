@@ -110,10 +110,12 @@ export class ClaudeApiService {
         const maxRetries = this.config.REQUEST_MAX_RETRIES;
         const baseDelay = this.config.REQUEST_BASE_DELAY; // 1 second base delay
 
-        // 记录详细的请求信息
+        // 使用 setImmediate 异步记录日志,避免阻塞流
         const vendorName = this.config.vendorName || 'unknown';
         const fullUrl = `${this.baseUrl}${endpoint}`;
-        console.log(`[Claude Stream Request] Vendor: ${vendorName}, Method: POST, Full URL: ${fullUrl}, Model: ${body.model || 'N/A'}`);
+        setImmediate(() => {
+            process.stdout.write(`[Claude Stream Request] Vendor: ${vendorName}, Method: POST, Full URL: ${fullUrl}, Model: ${body.model || 'N/A'}\n`);
+        });
 
         try {
             const response = await this.client.post(endpoint, { ...body, stream: true }, { responseType: 'stream' });
@@ -143,7 +145,10 @@ export class ClaudeApiService {
                                 return;
                             }
                         } catch (e) {
-                            console.warn("[ClaudeApiService] Failed to parse stream chunk JSON:", e.message, "Data:", data);
+                            // 使用 setImmediate 异步记录警告
+                            setImmediate(() => {
+                                process.stderr.write(`[ClaudeApiService] Failed to parse stream chunk JSON: ${e.message}, Data: ${data}\n`);
+                            });
                         }
                     }
                 }
@@ -158,7 +163,9 @@ export class ClaudeApiService {
             // 处理 429 (Too Many Requests) 与指数退避
             if (error.response?.status === 429 && retryCount < maxRetries) {
                 const delay = baseDelay * Math.pow(2, retryCount);
-                console.log(`[API] Received 429 (Too Many Requests) during stream. Retrying in ${delay}ms... (attempt ${retryCount + 1}/${maxRetries})`);
+                setImmediate(() => {
+                    process.stdout.write(`[API] Received 429 (Too Many Requests) during stream. Retrying in ${delay}ms... (attempt ${retryCount + 1}/${maxRetries})\n`);
+                });
                 await new Promise(resolve => setTimeout(resolve, delay));
                 yield* this.streamApi(endpoint, body, isRetry, retryCount + 1);
                 return;
@@ -167,13 +174,17 @@ export class ClaudeApiService {
             // 处理其他可重试错误 (5xx 服务器错误)
             if (error.response?.status >= 500 && error.response?.status < 600 && retryCount < maxRetries) {
                 const delay = baseDelay * Math.pow(2, retryCount);
-                console.log(`[API] Received ${error.response.status} server error during stream. Retrying in ${delay}ms... (attempt ${retryCount + 1}/${maxRetries})`);
+                setImmediate(() => {
+                    process.stdout.write(`[API] Received ${error.response.status} server error during stream. Retrying in ${delay}ms... (attempt ${retryCount + 1}/${maxRetries})\n`);
+                });
                 await new Promise(resolve => setTimeout(resolve, delay));
                 yield* this.streamApi(endpoint, body, isRetry, retryCount + 1);
                 return;
             }
 
-            console.error("[ClaudeApiService] Error generating content stream:", error.response ? error.response.data : error.message);
+            setImmediate(() => {
+                process.stderr.write(`[ClaudeApiService] Error generating content stream: ${error.response ? JSON.stringify(error.response.data) : error.message}\n`);
+            });
             throw error;
         }
     }

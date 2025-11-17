@@ -79,10 +79,12 @@ export class OpenAIApiService {
         const maxRetries = this.config.REQUEST_MAX_RETRIES;
         const baseDelay = this.config.REQUEST_BASE_DELAY;  // 1 second base delay
 
-            // 记录详细的请求信息
-            const vendorName = this.config.vendorName || 'unknown';
-            const fullUrl = `${this.baseUrl}${endpoint}`;
-            console.log(`[OpenAI Stream Request] Vendor: ${vendorName}, BaseURL: ${this.baseUrl}, Endpoint: ${endpoint}, Full URL: ${fullUrl}, Model: ${body.model || 'N/A'}`);
+        // 使用 setImmediate 异步记录日志,避免阻塞流
+        const vendorName = this.config.vendorName || 'unknown';
+        const fullUrl = `${this.baseUrl}${endpoint}`;
+        setImmediate(() => {
+            process.stdout.write(`[OpenAI Stream Request] Vendor: ${vendorName}, BaseURL: ${this.baseUrl}, Endpoint: ${endpoint}, Full URL: ${fullUrl}, Model: ${body.model || 'N/A'}\n`);
+        });
             
         // OpenAI 的流式请求需要将 stream 设置为 true
         const streamRequestBody = { ...body, stream: true };
@@ -111,7 +113,10 @@ export class OpenAIApiService {
                             const parsedChunk = JSON.parse(jsonData);
                             yield parsedChunk;
                         } catch (e) {
-                            console.warn("[OpenAIApiService] Failed to parse stream chunk JSON:", e.message, "Data:", jsonData);
+                            // 使用 setImmediate 异步记录警告
+                            setImmediate(() => {
+                                process.stderr.write(`[OpenAIApiService] Failed to parse stream chunk JSON: ${e.message}, Data: ${jsonData}\n`);
+                            });
                         }
                     } else if (line === '') {
                         // Empty line, end of an event
@@ -129,7 +134,9 @@ export class OpenAIApiService {
             // Handle 429 (Too Many Requests) with exponential backoff
             if (status === 429 && retryCount < maxRetries) {
                 const delay = baseDelay * Math.pow(2, retryCount);
-                console.log(`[API] Received 429 (Too Many Requests) during stream. Retrying in ${delay}ms... (attempt ${retryCount + 1}/${maxRetries})`);
+                setImmediate(() => {
+                    process.stdout.write(`[API] Received 429 (Too Many Requests) during stream. Retrying in ${delay}ms... (attempt ${retryCount + 1}/${maxRetries})\n`);
+                });
                 await new Promise(resolve => setTimeout(resolve, delay));
                 yield* this.streamApi(endpoint, body, isRetry, retryCount + 1);
                 return;
@@ -138,13 +145,17 @@ export class OpenAIApiService {
             // Handle other retryable errors (5xx server errors)
             if (status >= 500 && status < 600 && retryCount < maxRetries) {
                 const delay = baseDelay * Math.pow(2, retryCount);
-                console.log(`[API] Received ${status} server error during stream. Retrying in ${delay}ms... (attempt ${retryCount + 1}/${maxRetries})`);
+                setImmediate(() => {
+                    process.stdout.write(`[API] Received ${status} server error during stream. Retrying in ${delay}ms... (attempt ${retryCount + 1}/${maxRetries})\n`);
+                });
                 await new Promise(resolve => setTimeout(resolve, delay));
                 yield* this.streamApi(endpoint, body, isRetry, retryCount + 1);
                 return;
             }
 
-            console.error(`Error calling OpenAI streaming API (Status: ${status}):`, data || error.message);
+            setImmediate(() => {
+                process.stderr.write(`Error calling OpenAI streaming API (Status: ${status}): ${data || error.message}\n`);
+            });
             throw error;
         }
     }

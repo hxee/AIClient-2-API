@@ -577,33 +577,47 @@ export async function handleStreamRequest(res, service, model, requestBody, from
 
 export async function handleUnaryRequest(res, service, model, requestBody, fromProvider, toProvider, PROMPT_LOG_MODE, PROMPT_LOG_FILENAME, providerPoolManager, pooluuid) {
     try{
-        console.log(`[Unary Request] Starting content generation - fromProvider: ${fromProvider}, toProvider: ${toProvider}, model: ${model}`);
+        setImmediate(() => {
+            process.stdout.write(`[Unary Request] Starting content generation - fromProvider: ${fromProvider}, toProvider: ${toProvider}, model: ${model}\n`);
+        });
         
         // The service returns the response in its native format (toProvider).
         const needsConversion = getProtocolPrefix(fromProvider) !== getProtocolPrefix(toProvider);
         requestBody.model = model;
         // fs.writeFile('oldRequest'+Date.now()+'.json', JSON.stringify(requestBody));
         
-        console.log(`[Unary Request] Calling service.generateContent...`);
+        setImmediate(() => {
+            process.stdout.write(`[Unary Request] Calling service.generateContent...\n`);
+        });
         const nativeResponse = await service.generateContent(model, requestBody);
-        console.log(`[Unary Request] ✓ Received response from service`);
+        setImmediate(() => {
+            process.stdout.write(`[Unary Request] ✓ Received response from service\n`);
+        });
         
         const responseText = extractResponseText(nativeResponse, toProvider);
 
         // Convert the response back to the client's format (fromProvider), if necessary.
         let clientResponse = nativeResponse;
         if (needsConversion) {
-            console.log(`[Response Convert] Converting response from ${toProvider} to ${fromProvider}`);
+            setImmediate(() => {
+                process.stdout.write(`[Response Convert] Converting response from ${toProvider} to ${fromProvider}\n`);
+            });
             clientResponse = convertData(nativeResponse, 'response', toProvider, fromProvider, model);
         }
 
-        console.log(`[Unary Request] Sending response to client`);
+        setImmediate(() => {
+            process.stdout.write(`[Unary Request] Sending response to client\n`);
+        });
         await handleUnifiedResponse(res, JSON.stringify(clientResponse), false);
         await logConversation('output', responseText, PROMPT_LOG_MODE, PROMPT_LOG_FILENAME);
-        console.log(`[Unary Request] ✓ Request completed successfully`);
+        setImmediate(() => {
+            process.stdout.write(`[Unary Request] ✓ Request completed successfully\n`);
+        });
         // fs.writeFile('oldResponse'+Date.now()+'.json', JSON.stringify(clientResponse));
     } catch (error) {
-        console.error('\n[Server] Error during unary processing:', error.stack);        // Skip marking providers unhealthy on unary errors; fallback logic handles retries
+        setImmediate(() => {
+            process.stderr.write(`\n[Server] Error during unary processing: ${error.stack}\n`);
+        });
 
         // 返回错误响应给客户端
         const errorResponse = {
@@ -614,7 +628,9 @@ export async function handleUnaryRequest(res, service, model, requestBody, fromP
             }
         };
         
-        console.log(`[Unary Request] Sending error response to client`);
+        setImmediate(() => {
+            process.stdout.write(`[Unary Request] Sending error response to client\n`);
+        });
         await handleUnifiedResponse(res, JSON.stringify(errorResponse), false);
     }
 }
@@ -844,28 +860,36 @@ export async function handleContentGenerationRequest(req, res, service, endpoint
     // Remove prefix from model name before sending to backend
     let model = removeModelPrefix(rawModel);
     
-    console.log(`[Provider Selection] Raw model: ${rawModel}, Clean model: ${model}`);
-    console.log(`[Provider Selection] Provider selection result:`, {
-        providerType: toProvider,
-        hasProviderConfig: !!selectedProviderConfig,
-        uuid: selectedProviderConfig?.uuid,
-        vendorName: selectedProviderConfig?.vendorName,
-        hasModelMapping: !!selectedProviderConfig?.modelMapping
+    setImmediate(() => {
+        process.stdout.write(`[Provider Selection] Raw model: ${rawModel}, Clean model: ${model}\n`);
+        process.stdout.write(`[Provider Selection] Provider selection result: ${JSON.stringify({
+            providerType: toProvider,
+            hasProviderConfig: !!selectedProviderConfig,
+            uuid: selectedProviderConfig?.uuid,
+            vendorName: selectedProviderConfig?.vendorName,
+            hasModelMapping: !!selectedProviderConfig?.modelMapping
+        })}\n`);
+        process.stdout.write(`[Provider Selection] Selected provider type: ${toProvider}, will use round-robin selection\n`);
+        process.stdout.write(`[Provider Selection] Will pass requestedModel="${model}" to provider pool manager for filtering\n`);
     });
-    console.log(`[Provider Selection] Selected provider type: ${toProvider}, will use round-robin selection`);
-    console.log(`[Provider Selection] Will pass requestedModel="${model}" to provider pool manager for filtering`);
 
     // 3. Convert request body from client format to backend format, if necessary.
     let processedRequestBody = originalRequestBody;
     // fs.writeFile('originalRequestBody'+Date.now()+'.json', JSON.stringify(originalRequestBody));
     if (getProtocolPrefix(fromProvider) !== getProtocolPrefix(toProvider)) {
-        console.log(`[Request Convert] Converting request from ${fromProvider} to ${toProvider}`);
+        setImmediate(() => {
+            process.stdout.write(`[Request Convert] Converting request from ${fromProvider} to ${toProvider}\n`);
+        });
         processedRequestBody = convertData(originalRequestBody, 'request', fromProvider, toProvider);
     } else {
-        console.log(`[Request Convert] Request format matches backend provider. No conversion needed.`);
+        setImmediate(() => {
+            process.stdout.write(`[Request Convert] Request format matches backend provider. No conversion needed.\n`);
+        });
     }
 
-    console.log(`[Content Generation] Model: ${model}, Stream: ${isStream}`);
+    setImmediate(() => {
+        process.stdout.write(`[Content Generation] Model: ${model}, Stream: ${isStream}\n`);
+    });
 
     // 4. Apply system prompt from file if configured.
     processedRequestBody = await _applySystemPromptFromFile(CONFIG, processedRequestBody, toProvider);
@@ -918,15 +942,17 @@ export async function handleContentGenerationRequest(req, res, service, endpoint
     
     const actualUuid = actualConfig?.uuid || selectedProviderUuid || 'N/A';
     
-    console.log(`\n========== REQUEST INFO ==========`);
-    console.log(`[Request] Provider Type: ${toProvider}`);
-    console.log(`[Request] Vendor Name: ${actualVendorName}`);
-    console.log(`[Request] Provider UUID: ${actualUuid}`);
-    console.log(`[Request] Base URL: ${baseUrl}`);
-    console.log(`[Request] User-Agent: ${userAgent}`);
-    console.log(`[Request] Model: ${model}`);
-    console.log(`[Request] Stream: ${isStream}`);
-    console.log(`==================================\n`);
+    setImmediate(() => {
+        process.stdout.write(`\n========== REQUEST INFO ==========\n`);
+        process.stdout.write(`[Request] Provider Type: ${toProvider}\n`);
+        process.stdout.write(`[Request] Vendor Name: ${actualVendorName}\n`);
+        process.stdout.write(`[Request] Provider UUID: ${actualUuid}\n`);
+        process.stdout.write(`[Request] Base URL: ${baseUrl}\n`);
+        process.stdout.write(`[Request] User-Agent: ${userAgent}\n`);
+        process.stdout.write(`[Request] Model: ${model}\n`);
+        process.stdout.write(`[Request] Stream: ${isStream}\n`);
+        process.stdout.write(`==================================\n\n`);
+    });
     
     // 7. Call the appropriate stream or unary handler, passing the provider info.
     if (isStream) {

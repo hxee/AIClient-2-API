@@ -48,23 +48,27 @@ export function createRequestHandler(config, providerPoolManager) {
         const uiHandled = await handleUIApiRequests(method, path, req, res, currentConfig, providerPoolManager);
         if (uiHandled) return;
 
-        console.log(`\n${'='.repeat(80)}`);
-        console.log(`[Server] ${new Date().toLocaleString()}`);
-        console.log(`[Request] ${req.method} http://${req.headers.host}${req.url}`);
-        console.log(`[Request] Original Path: ${path}`);
-        console.log(`[Request] Headers:`, JSON.stringify({
-            'authorization': req.headers['authorization'] ? '[REDACTED]' : undefined,
-            'model-provider': req.headers['model-provider'],
-            'content-type': req.headers['content-type'],
-            'user-agent': req.headers['user-agent']
-        }, null, 2));
+        setImmediate(() => {
+            process.stdout.write(`\n${'='.repeat(80)}\n`);
+            process.stdout.write(`[Server] ${new Date().toLocaleString()}\n`);
+            process.stdout.write(`[Request] ${req.method} http://${req.headers.host}${req.url}\n`);
+            process.stdout.write(`[Request] Original Path: ${path}\n`);
+            process.stdout.write(`[Request] Headers: ${JSON.stringify({
+                'authorization': req.headers['authorization'] ? '[REDACTED]' : undefined,
+                'model-provider': req.headers['model-provider'],
+                'content-type': req.headers['content-type'],
+                'user-agent': req.headers['user-agent']
+            }, null, 2)}\n`);
+        });
         
         // Handle API requests
         // Allow overriding MODEL_PROVIDER via request header
         const modelProviderHeader = req.headers['model-provider'];
         if (modelProviderHeader) {
             currentConfig.MODEL_PROVIDER = modelProviderHeader;
-            console.log(`[Router] MODEL_PROVIDER overridden by header to: ${currentConfig.MODEL_PROVIDER}`);
+            setImmediate(() => {
+                process.stdout.write(`[Router] MODEL_PROVIDER overridden by header to: ${currentConfig.MODEL_PROVIDER}\n`);
+            });
         }
 
         // Allow selecting a specific provider UUID via header or query param
@@ -72,34 +76,50 @@ export function createRequestHandler(config, providerPoolManager) {
         const providerUuidFromQuery = requestUrl.searchParams.get('provider_uuid') || requestUrl.searchParams.get('uuid');
         if (providerUuidFromHeader || providerUuidFromQuery) {
             currentConfig.uuid = (providerUuidFromHeader || providerUuidFromQuery).trim();
-            console.log(`[Router] Preferred provider UUID set to: ${currentConfig.uuid}`);
+            setImmediate(() => {
+                process.stdout.write(`[Router] Preferred provider UUID set to: ${currentConfig.uuid}\n`);
+            });
         }
           
         // Check if the first path segment matches a MODEL_PROVIDER and switch if it does
         const pathSegments = path.split('/').filter(segment => segment.length > 0);
-        console.log(`[Router] Path segments:`, pathSegments);
+        setImmediate(() => {
+            process.stdout.write(`[Router] Path segments: ${JSON.stringify(pathSegments)}\n`);
+        });
         
         if (pathSegments.length > 0) {
             const firstSegment = pathSegments[0];
             const isValidProvider = Object.values(MODEL_PROVIDER).includes(firstSegment);
-            console.log(`[Router] First segment: "${firstSegment}", Is valid provider: ${isValidProvider}`);
+            setImmediate(() => {
+                process.stdout.write(`[Router] First segment: "${firstSegment}", Is valid provider: ${isValidProvider}\n`);
+            });
             
             // Fix: treat v1 (and v1beta) as not a provider for routing purposes
             if (firstSegment === 'v1' || firstSegment === 'v1beta') {
-                console.log(`[Router] Special segment "${firstSegment}" treated as non-provider`);
+                setImmediate(() => {
+                    process.stdout.write(`[Router] Special segment "${firstSegment}" treated as non-provider\n`);
+                });
             } else if (firstSegment && isValidProvider) {
                 currentConfig.MODEL_PROVIDER = firstSegment;
-                console.log(`[Router] ✓ MODEL_PROVIDER set by path to: ${currentConfig.MODEL_PROVIDER}`);
+                setImmediate(() => {
+                    process.stdout.write(`[Router] ✓ MODEL_PROVIDER set by path to: ${currentConfig.MODEL_PROVIDER}\n`);
+                });
                 pathSegments.shift();
                 path = '/' + pathSegments.join('/');
                 requestUrl.pathname = path;
-                console.log(`[Router] Normalized path: ${path}`);
+                setImmediate(() => {
+                    process.stdout.write(`[Router] Normalized path: ${path}\n`);
+                });
             } else if (firstSegment && !isValidProvider) {
-                console.log(`[Router] ✗ Not a valid MODEL_PROVIDER, keeping default: ${currentConfig.MODEL_PROVIDER}`);
+                setImmediate(() => {
+                    process.stdout.write(`[Router] ✗ Not a valid MODEL_PROVIDER, keeping default: ${currentConfig.MODEL_PROVIDER}\n`);
+                });
             }
         }
         
-        console.log(`[Router] Final MODEL_PROVIDER: ${currentConfig.MODEL_PROVIDER}`);
+        setImmediate(() => {
+            process.stdout.write(`[Router] Final MODEL_PROVIDER: ${currentConfig.MODEL_PROVIDER}\n`);
+        });
 
         // Normalize common Ollama path aliases (e.g., '/ollama/api/tags' -> '/api/tags')
         if (path.startsWith('/ollama/')) {
@@ -157,11 +177,17 @@ export function createRequestHandler(config, providerPoolManager) {
         
         if (needsApiService) {
             try {
-                console.log(`[Service] Getting API service for provider: ${currentConfig.MODEL_PROVIDER}`);
+                setImmediate(() => {
+                    process.stdout.write(`[Service] Getting API service for provider: ${currentConfig.MODEL_PROVIDER}\n`);
+                });
                 apiService = await getApiService(currentConfig);
-                console.log(`[Service] ✓ API service obtained successfully`);
+                setImmediate(() => {
+                    process.stdout.write(`[Service] ✓ API service obtained successfully\n`);
+                });
             } catch (error) {
-                console.error(`[Service] ✗ Failed to get API service: ${error.message}`);
+                setImmediate(() => {
+                    process.stderr.write(`[Service] ✗ Failed to get API service: ${error.message}\n`);
+                });
                 handleError(res, { statusCode: 500, message: `Failed to get API service: ${error.message}` });
                 const poolManager = getProviderPoolManager();
                 if (poolManager) {
