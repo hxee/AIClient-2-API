@@ -1,8 +1,5 @@
 node_modules
 .claude/
 .bmad-core/
-fetch_system_prompt.txt
 input_system_prompt.txt
-configs
 config.json
-provider.json
