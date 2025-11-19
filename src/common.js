@@ -350,13 +350,11 @@ export function getProviderByModelName(modelName, providerPoolManager, defaultPr
     return defaultResult;
 }
 
+// Minimal version: Only OpenAI and Claude endpoints
 export const ENDPOINT_TYPE = {
-    OPENAI_CHAT: 'openai_chat',
-    OPENAI_RESPONSES: 'openai_responses',
-    GEMINI_CONTENT: 'gemini_content',
-    CLAUDE_MESSAGE: 'claude_message',
-    OPENAI_MODEL_LIST: 'openai_model_list',
-    GEMINI_MODEL_LIST: 'gemini_model_list',
+    OPENAI_CHAT: 'openai-chat',
+    CLAUDE_MESSAGE: 'claude-message',
+    OPENAI_MODEL_LIST: 'openai-model-list',
 };
 
 export const FETCH_SYSTEM_PROMPT_FILE = path.join(process.cwd(), 'fetch_system_prompt.txt');
@@ -759,17 +757,16 @@ export async function handleContentGenerationRequest(req, res, service, endpoint
     }, null, 2));
     console.log(`${'='.repeat(60)}`);
 
+    // Minimal version: Only OpenAI and Claude formats
     const clientProviderMap = {
         [ENDPOINT_TYPE.OPENAI_CHAT]: MODEL_PROTOCOL_PREFIX.OPENAI,
-        [ENDPOINT_TYPE.OPENAI_RESPONSES]: MODEL_PROTOCOL_PREFIX.OPENAI_RESPONSES,
         [ENDPOINT_TYPE.CLAUDE_MESSAGE]: MODEL_PROTOCOL_PREFIX.CLAUDE,
-        [ENDPOINT_TYPE.GEMINI_CONTENT]: MODEL_PROTOCOL_PREFIX.GEMINI,
     };
 
     const fromProvider = clientProviderMap[endpointType];
 
     if (!fromProvider) {
-        throw new Error(`Unsupported endpoint type for content generation: ${endpointType}`);
+        throw new Error(`Unsupported endpoint type: ${endpointType}. Minimal version only supports openai-chat and claude-message`);
     }
 
     // Log API request info to upstream
