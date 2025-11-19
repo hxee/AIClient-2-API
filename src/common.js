@@ -645,161 +645,73 @@ export async function handleUnaryRequest(res, service, model, requestBody, fromP
  * @param {string} endpointType The type of endpoint being called (e.g., OPENAI_MODEL_LIST).
  * @param {Object} CONFIG - The server configuration object.
  */
-export async function handleModelListRequest(req, res, service, endpointType, CONFIG, providerPoolManager, pooluuid) {
-    try{
-        const startTime = Date.now();
-        const clientProviderMap = {
-            [ENDPOINT_TYPE.OPENAI_MODEL_LIST]: MODEL_PROTOCOL_PREFIX.OPENAI,
-            [ENDPOINT_TYPE.GEMINI_MODEL_LIST]: MODEL_PROTOCOL_PREFIX.GEMINI,
-        };
+/**
+ * Minimal version: Directly fetch models from upstream OpenAI API
+ */
+export async function handleModelListRequest(req, res, service, endpointType, CONFIG) {
+    const startTime = Date.now();
 
-        const fromProvider = clientProviderMap[endpointType];
+    try {
+        // Log request info from client
+        console.log(`\n${'='.repeat(60)}`);
+        console.log(`=== REQUEST INFO === (from client)`);
+        console.log(`Time: ${new Date().toISOString()}`);
+        console.log(`Method: ${req.method}`);
+        console.log(`URL: ${req.url}`);
+        console.log(`Client IP: ${req.socket.remoteAddress}`);
+        console.log(`Headers:`, JSON.stringify({
+            'user-agent': req.headers['user-agent'],
+            'authorization': req.headers.authorization ? 'Bearer ***' : 'None',
+            'content-type': req.headers['content-type']
+        }, null, 2));
+        console.log(`Endpoint Type: ${endpointType}`);
+        console.log(`${'='.repeat(60)}`);
 
-        if (!fromProvider) {
-            throw new Error(`Unsupported endpoint type for model list: ${endpointType}`);
+        // Only support OpenAI format in minimal version
+        if (endpointType !== 'openai-model-list') {
+            throw new Error(`Unsupported endpoint type: ${endpointType}. Minimal version only supports openai-model-list`);
         }
 
-        console.log(`\n[ModelList] Starting model list request for format: ${fromProvider}`);
+        // Log API request info to upstream
+        console.log(`\n=== API REQUEST INFO === (to upstream)`);
+        console.log(`Upstream: ${CONFIG.OPENAI_BASE_URL}`);
+        console.log(`Endpoint: GET /models`);
+        console.log(`API Key: ${CONFIG.OPENAI_API_KEY ? `${CONFIG.OPENAI_API_KEY.substring(0, 10)}...` : 'Not configured'}`);
+        console.log(`${'='.repeat(60)}\n`);
 
-        // Check if provider pools are configured
-        if (!providerPoolManager?.providerPools) {
-            console.warn(`[ModelList] No provider pools configured. Please configure provider.json`);
-            res.writeHead(200, { 'Content-Type': 'application/json' });
-            res.end(JSON.stringify(fromProvider === MODEL_PROTOCOL_PREFIX.OPENAI ? { object: 'list', data: [] } : { models: [] }));
-            return;
-        }
-        
-        // Load models from models.json
-        const { modelsConfigManager } = await import('./models-config-manager.js');
-        await modelsConfigManager.ensureConfigLoaded();
-        
-        const allModels = [];
-        const format = fromProvider === MODEL_PROTOCOL_PREFIX.OPENAI ? 'openai' : 'gemini';
-        
-        // Map provider types to models.json keys
-        const providerTypeMapping = {
-            'gemini-cli-oauth': 'gemini-cli',
-            'gemini-cli': 'gemini-cli',
-            'openai-custom': 'openai-custom',
-            'openai-qwen-oauth': 'qwen-api',
-            'qwen-api': 'qwen-api',
-            'claude-custom': 'claude-custom',
-            'claude-kiro-oauth': 'claude-kiro',
-            'kiro-api': 'claude-kiro',
-            'openaiResponses-custom': 'openai-responses',
-            'openai-responses': 'openai-responses'
-        };
-        
-        console.log(`[ModelList] Configured providers in provider.json:`, Object.keys(providerPoolManager.providerPools));
-        
-        // Iterate through provider pools and add models from models.json
-        for (const [providerType, poolData] of Object.entries(providerPoolManager.providerPools)) {
-            // 兼容新旧格式：提取 providers 数组
-            const providers = Array.isArray(poolData) ? poolData : (poolData.providers || []);
-            
-            // Find healthy and enabled providers
-            const healthyProviders = providers.filter(p => p.isHealthy && !p.isDisabled);
-            
-            if (healthyProviders.length === 0) {
-                console.log(`[ModelList] ⚠ ${providerType}: No healthy providers available (total: ${providers.length}, healthy: 0)`);
-                continue;
-            }
-            
-            console.log(`[ModelList] ${providerType}: Found ${healthyProviders.length} healthy provider(s)`);
-            
-            // Map to models.json provider key
-            const configProviderKey = providerTypeMapping[providerType] || providerType;
-            
-            try {
-                // Get models from models.json for this provider
-                const providerModels = await modelsConfigManager.getModelsForProvider(configProviderKey);
-                
-                if (!providerModels || providerModels.length === 0) {
-                    console.warn(`[ModelList] No models found in models.json for ${configProviderKey}`);
-                    continue;
-                }
-                
-                // Use the first healthy provider for prefix info
-                const healthyProvider = healthyProviders[0];
-                
-                // For openai-custom, filter models based on modelMapping
-                let modelsToShow = providerModels;
-                if (providerType === 'openai-custom') {
-                    // Collect all mapped models from all healthy providers
-                    const allMappedModels = new Set();
-                    healthyProviders.forEach(provider => {
-                        if (provider.modelMapping && typeof provider.modelMapping === 'object') {
-                            Object.keys(provider.modelMapping).forEach(mappedModel => {
-                                allMappedModels.add(mappedModel);
-                            });
-                        }
-                    });
-                    
-                    // Only show models that have at least one mapping
-                    if (allMappedModels.size > 0) {
-                        modelsToShow = providerModels.filter(model => allMappedModels.has(model.id));
-                        console.log(`[ModelList] ${providerType}: Filtered to ${modelsToShow.length} models with mappings (from ${providerModels.length} total)`);
-                    } else {
-                        console.log(`[ModelList] ${providerType}: No modelMapping configured, showing no models`);
-                        modelsToShow = [];
-                    }
-                }
-                
-                // Convert models to the required format
-                let formattedModels = modelsToShow.map(model => {
-                    if (format === 'openai') {
-                        return {
-                            id: model.id,
-                            object: 'model',
-                            created: Math.floor(Date.now() / 1000),
-                            owned_by: configProviderKey
-                        };
-                    } else {
-                        // Gemini format
-                        return {
-                            name: model.id,
-                            displayName: model.name || model.id,
-                            description: model.description || '',
-                            supportedGenerationMethods: ['generateContent', 'streamGenerateContent']
-                        };
-                    }
-                });
-                
-                // Add provider prefixes
-                formattedModels = addPrefixToModels(formattedModels, providerType, format, healthyProvider);
-                
-                allModels.push(...formattedModels);
-                console.log(`[ModelList] ✓ Added ${formattedModels.length} models from ${providerType}`);
-                
-            } catch (error) {
-                console.error(`[ModelList] ✗ Failed to load models for ${providerType}: ${error.message}`);
-            }
-        }
-        
-        // Build final response
-        let finalResponse;
-        if (fromProvider === MODEL_PROTOCOL_PREFIX.OPENAI) {
-            finalResponse = {
-                object: 'list',
-                data: allModels
-            };
-        } else {
-            finalResponse = {
-                models: allModels
-            };
-        }
+        // Fetch models from upstream OpenAI API
+        console.log(`[ModelList] Fetching models from upstream...`);
+        const modelsResponse = await service.listModels();
 
         const elapsed = Date.now() - startTime;
-        console.log(`[ModelList] ✓ Total models collected: ${allModels.length} from ${Object.keys(providerPoolManager.providerPools).length} provider type(s) (${elapsed}ms)`);
+        const modelCount = modelsResponse.data?.length || 0;
+
+        console.log(`[ModelList] ✓ Fetched ${modelCount} models from upstream (${elapsed}ms)`);
         console.log(`[ModelList] Sending response to client\n`);
-        
-        res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify(finalResponse));
+
+        // Return the response from upstream directly
+        res.writeHead(200, {
+            'Content-Type': 'application/json',
+            'Access-Control-Allow-Origin': '*'
+        });
+        res.end(JSON.stringify(modelsResponse));
+
     } catch (error) {
-        console.error('\n[Server] Error during model list processing:', error.stack);
+        const elapsed = Date.now() - startTime;
+        console.error(`\n[ModelList] ✗ Error fetching models (${elapsed}ms):`, error.message);
+        console.error(`[ModelList] Stack trace:`, error.stack);
+
         if (!res.headersSent) {
-            res.writeHead(500, { 'Content-Type': 'application/json' });
-            res.end(JSON.stringify({ error: { message: error.message } }));
+            res.writeHead(500, {
+                'Content-Type': 'application/json',
+                'Access-Control-Allow-Origin': '*'
+            });
+            res.end(JSON.stringify({
+                error: {
+                    message: error.message,
+                    type: 'upstream_error'
+                }
+            }));
         }
     }
 }
@@ -816,10 +728,36 @@ export async function handleModelListRequest(req, res, service, endpointType, CO
  * @param {string} PROMPT_LOG_FILENAME - The prompt log filename.
  */
 export async function handleContentGenerationRequest(req, res, service, endpointType, CONFIG, PROMPT_LOG_FILENAME, providerPoolManager, pooluuid) {
+    const startTime = Date.now();
+
+    // Log request info from client
+    console.log(`\n${'='.repeat(60)}`);
+    console.log(`=== REQUEST INFO === (from client)`);
+    console.log(`Time: ${new Date().toISOString()}`);
+    console.log(`Method: ${req.method}`);
+    console.log(`URL: ${req.url}`);
+    console.log(`Client IP: ${req.socket.remoteAddress}`);
+    console.log(`Headers:`, JSON.stringify({
+        'user-agent': req.headers['user-agent'],
+        'authorization': req.headers.authorization ? 'Bearer ***' : 'None',
+        'content-type': req.headers['content-type']
+    }, null, 2));
+    console.log(`Endpoint Type: ${endpointType}`);
+
     const originalRequestBody = await getRequestBody(req);
     if (!originalRequestBody) {
         throw new Error("Request body is missing for content generation.");
     }
+
+    // Log request body info (without showing full content)
+    console.log(`Request Body:`, JSON.stringify({
+        model: originalRequestBody.model,
+        stream: originalRequestBody.stream,
+        max_tokens: originalRequestBody.max_tokens,
+        temperature: originalRequestBody.temperature,
+        messages_count: originalRequestBody.messages?.length || 0
+    }, null, 2));
+    console.log(`${'='.repeat(60)}`);
 
     const clientProviderMap = {
         [ENDPOINT_TYPE.OPENAI_CHAT]: MODEL_PROTOCOL_PREFIX.OPENAI,
@@ -829,10 +767,17 @@ export async function handleContentGenerationRequest(req, res, service, endpoint
     };
 
     const fromProvider = clientProviderMap[endpointType];
-    
+
     if (!fromProvider) {
         throw new Error(`Unsupported endpoint type for content generation: ${endpointType}`);
     }
+
+    // Log API request info to upstream
+    console.log(`\n=== API REQUEST INFO === (to upstream)`);
+    console.log(`Upstream: ${CONFIG.OPENAI_BASE_URL}`);
+    console.log(`API Key: ${CONFIG.OPENAI_API_KEY ? `${CONFIG.OPENAI_API_KEY.substring(0, 10)}...` : 'Not configured'}`);
+    console.log(`From Provider Format: ${fromProvider}`);
+    console.log(`${'='.repeat(60)}\n`);
 
     // 1. Extract model first to determine the correct provider
     const { model: rawModel, isStream } = _extractModelAndStreamInfo(req, originalRequestBody, fromProvider);
