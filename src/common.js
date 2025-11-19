@@ -86,22 +86,7 @@ export const MODEL_PREFIX_MAP = {
     [MODEL_PROVIDER.OPENAI_CUSTOM_RESPONSES]: '[OpenAI Responses]',
 }
 
-const PROVIDER_ALIAS = {
-    [MODEL_PROVIDER.GEMINI_CLI]: 'gemini',
-    [MODEL_PROVIDER.QWEN_API]: 'qwen',
-    [MODEL_PROVIDER.KIRO_API]: 'kiro',
-    [MODEL_PROVIDER.OPENAI_CUSTOM]: 'chat',
-    [MODEL_PROVIDER.OPENAI_CUSTOM_RESPONSES]: 'responses',
-    [MODEL_PROVIDER.CLAUDE_CUSTOM]: 'claude',
-};
-
-const ALIAS_TO_PROVIDER_TYPES = Object.entries(PROVIDER_ALIAS).reduce((map, [providerType, alias]) => {
-    if (!alias) return map;
-    const key = alias.toLowerCase();
-    if (!map[key]) map[key] = [];
-    map[key].push(providerType);
-    return map;
-}, {});
+// Removed: PROVIDER_ALIAS and ALIAS_TO_PROVIDER_TYPES (not needed in minimal version)
 
 /**
  * Extracts the protocol prefix from a given model provider string.
@@ -230,125 +215,11 @@ export function addPrefixToModels(models, provider, format = 'openai', providerI
  * @param {string} modelName - Model name with prefix like "[OpenAI-AnyRouter] model"
  * @returns {{protocol: string|null, vendor: string|null, providerUuid: string|null}} Protocol, vendor and provider uuid
  */
-export function extractPrefixInfo(modelName) {
-    if (!modelName) {
-        return { alias: null, vendor: null };
-    }
-    
-    const match = modelName.match(/^\[(.*?)\]/);
-    if (!match) {
-        return { alias: null, vendor: null };
-    }
-    
-    const prefixText = match[1];
-    const parts = prefixText.split('-').map(p => p.trim()).filter(Boolean);
-    
-    if (parts.length === 0) {
-        return { alias: null, vendor: null };
-    }
-    
-    const alias = parts[0].toLowerCase();
-    const vendor = parts.length > 1 ? parts.slice(1).join('-').toLowerCase() : null;
-    
-    return { alias, vendor };
-}
+// Removed: extractPrefixInfo (not needed in minimal version - no provider prefixes)
 
-/**
- * Find matching provider pool key based on protocol and vendor
- * @param {string} protocol - Protocol name (e.g., "openai", "gemini")
- * @param {string|null} vendor - Vendor name (e.g., "anyrouter", "deepseek")
- * @param {Object} providerPools - Available provider pools
- * @param {string|null} providerUuid - Specific provider UUID if encoded in prefix
- * @returns {{providerType: string, providerConfig: Object}|null} Matching provider info
- */
-export function findMatchingProviderKey(alias, vendor, providerPools) {
-    if (!alias || !providerPools) {
-        return null;
-    }
-    
-    const normalize = (value) => (value || '').toLowerCase();
-    const candidateProviderTypes = ALIAS_TO_PROVIDER_TYPES[alias] || [];
-    const availableKeys = candidateProviderTypes.length > 0 ? candidateProviderTypes : Object.keys(providerPools);
-    
-    // Helper function to get providers array from pool entry (handles both array and object format)
-    const getProvidersArray = (poolEntry) => {
-        if (!poolEntry) return [];
-        // If it's an object with providers property (new format), return providers array
-        if (typeof poolEntry === 'object' && !Array.isArray(poolEntry) && poolEntry.providers) {
-            return Array.isArray(poolEntry.providers) ? poolEntry.providers : [];
-        }
-        // If it's already an array (old format), return as-is
-        return Array.isArray(poolEntry) ? poolEntry : [];
-    };
-    
-    if (vendor) {
-        const normalizedVendor = normalize(vendor);
-        for (const key of availableKeys) {
-            const providers = getProvidersArray(providerPools[key]);
-            const matchedProvider = providers.find(p =>
-                normalize(p.vendorName) === normalizedVendor &&
-                !p.isDisabled &&
-                p.isHealthy !== false
-            );
-            if (matchedProvider) {
-                console.log(`[Provider Selection] vendorName match found: ${key} (${matchedProvider.vendorName})`);
-                return { providerType: key, providerConfig: matchedProvider };
-            }
-        }
-    }
-    
-    for (const key of availableKeys) {
-        const providers = getProvidersArray(providerPools[key]);
-        const healthyProvider = providers.find(p => p.isHealthy && !p.isDisabled);
-        if (healthyProvider) {
-            console.log(`[Provider Selection] Alias match found: ${alias} -> ${key}`);
-            return { providerType: key, providerConfig: healthyProvider };
-        }
-    }
-    
-    return null;
-}
+// Removed: findMatchingProviderKey (not needed in minimal version - no provider pools)
 
-/**
- * Determine which provider to use based on model name
- * @param {string} modelName - Model name (may include prefix like "[OpenAI-AnyRouter] gpt-4")
- * @param {Object} providerPoolManager - Provider pool manager
- * @param {string} defaultProvider - Default provider
- * @returns {string} Provider type
- */
-export function getProviderByModelName(modelName, providerPoolManager, defaultProvider) {
-    const defaultResult = {
-        providerType: defaultProvider,
-        providerConfig: null
-    };
-    
-    if (!modelName || !providerPoolManager || !providerPoolManager.providerPools) {
-        console.log(`[Provider Selection] Missing required parameters, using default: ${defaultProvider}`);
-        return defaultResult;
-    }
-    
-    console.log(`[Provider Selection] Processing model: ${modelName}`);
-    
-    // Step 1: Extract prefix information
-    const { alias, vendor } = extractPrefixInfo(modelName);
-    
-    if (alias) {
-        // Step 2: Try to find match based on alias/vendor
-        const matchedKey = findMatchingProviderKey(
-            alias,
-            vendor,
-            providerPoolManager.providerPools
-        );
-        if (matchedKey) {
-            return matchedKey;
-        }
-        
-        console.log(`[Provider Selection] No match found for prefix [${alias}${vendor ? '-' + vendor : ''}], falling back to default`);
-    }
-    
-    console.log(`[Provider Selection] No suitable provider found, using default: ${defaultProvider}`);
-    return defaultResult;
-}
+// Removed: getProviderByModelName (not needed in minimal version - direct OpenAI service)
 
 // Minimal version: Only OpenAI and Claude endpoints
 export const ENDPOINT_TYPE = {
@@ -481,7 +352,7 @@ export async function handleUnifiedResponse(res, responsePayload, isStream) {
     }
 }
 
-export async function handleStreamRequest(res, service, model, requestBody, fromProvider, toProvider, PROMPT_LOG_MODE, PROMPT_LOG_FILENAME, providerPoolManager, pooluuid) {
+export async function handleStreamRequest(res, service, model, requestBody, fromProvider, toProvider, PROMPT_LOG_MODE, PROMPT_LOG_FILENAME) {
     let fullResponseText = '';
     let fullResponseJson = '';
     let fullOldResponseJson = '';
@@ -573,7 +444,7 @@ export async function handleStreamRequest(res, service, model, requestBody, from
     }
 }
 
-export async function handleUnaryRequest(res, service, model, requestBody, fromProvider, toProvider, PROMPT_LOG_MODE, PROMPT_LOG_FILENAME, providerPoolManager, pooluuid) {
+export async function handleUnaryRequest(res, service, model, requestBody, fromProvider, toProvider, PROMPT_LOG_MODE, PROMPT_LOG_FILENAME) {
     try{
         setImmediate(() => {
             process.stdout.write(`[Unary Request] Starting content generation - fromProvider: ${fromProvider}, toProvider: ${toProvider}, model: ${model}\n`);
@@ -715,17 +586,17 @@ export async function handleModelListRequest(req, res, service, endpointType, CO
 }
 
 /**
- * Handles requests for content generation (both unary and streaming). This function
- * orchestrates request body parsing, conversion to the internal Gemini format,
- * logging, and dispatching to the appropriate stream or unary handler.
+ * Handles requests for content generation (both unary and streaming).
+ * Minimal version: Direct OpenAI proxy with optional Claude format conversion.
+ *
  * @param {http.IncomingMessage} req The HTTP request object.
  * @param {http.ServerResponse} res The HTTP response object.
- * @param {ApiServiceAdapter} service The API service adapter.
- * @param {string} endpointType The type of endpoint being called (e.g., OPENAI_CHAT).
+ * @param {ApiServiceAdapter} service The API service adapter (OpenAI).
+ * @param {string} endpointType The type of endpoint (openai-chat or claude-message).
  * @param {Object} CONFIG - The server configuration object.
  * @param {string} PROMPT_LOG_FILENAME - The prompt log filename.
  */
-export async function handleContentGenerationRequest(req, res, service, endpointType, CONFIG, PROMPT_LOG_FILENAME, providerPoolManager, pooluuid) {
+export async function handleContentGenerationRequest(req, res, service, endpointType, CONFIG, PROMPT_LOG_FILENAME) {
     const startTime = Date.now();
 
     // Log request info from client
@@ -747,7 +618,7 @@ export async function handleContentGenerationRequest(req, res, service, endpoint
         throw new Error("Request body is missing for content generation.");
     }
 
-    // Log request body info (without showing full content)
+    // Log request body info
     console.log(`Request Body:`, JSON.stringify({
         model: originalRequestBody.model,
         stream: originalRequestBody.stream,
@@ -757,150 +628,56 @@ export async function handleContentGenerationRequest(req, res, service, endpoint
     }, null, 2));
     console.log(`${'='.repeat(60)}`);
 
-    // Minimal version: Only OpenAI and Claude formats
+    // Determine format (OpenAI or Claude)
     const clientProviderMap = {
         [ENDPOINT_TYPE.OPENAI_CHAT]: MODEL_PROTOCOL_PREFIX.OPENAI,
         [ENDPOINT_TYPE.CLAUDE_MESSAGE]: MODEL_PROTOCOL_PREFIX.CLAUDE,
     };
 
     const fromProvider = clientProviderMap[endpointType];
-
     if (!fromProvider) {
-        throw new Error(`Unsupported endpoint type: ${endpointType}. Minimal version only supports openai-chat and claude-message`);
+        throw new Error(`Unsupported endpoint type: ${endpointType}`);
     }
 
-    // Log API request info to upstream
-    console.log(`\n=== API REQUEST INFO === (to upstream)`);
-    console.log(`Upstream: ${CONFIG.OPENAI_BASE_URL}`);
-    console.log(`API Key: ${CONFIG.OPENAI_API_KEY ? `${CONFIG.OPENAI_API_KEY.substring(0, 10)}...` : 'Not configured'}`);
-    console.log(`From Provider Format: ${fromProvider}`);
-    console.log(`${'='.repeat(60)}\n`);
-
-    // 1. Extract model first to determine the correct provider
-    const { model: rawModel, isStream } = _extractModelAndStreamInfo(req, originalRequestBody, fromProvider);
-    
-    if (!rawModel) {
+    // Extract model and stream info
+    const { model, isStream } = _extractModelAndStreamInfo(req, originalRequestBody, fromProvider);
+    if (!model) {
         throw new Error("Could not determine the model from the request.");
     }
-    
-    // 2. Determine the correct provider based on raw model name (with prefix)
-    // Use fromProvider as fallback instead of CONFIG.MODEL_PROVIDER to avoid wrong provider selection
-    const defaultProviderByEndpoint = {
-        [MODEL_PROTOCOL_PREFIX.OPENAI]: MODEL_PROVIDER.OPENAI_CUSTOM,
-        [MODEL_PROTOCOL_PREFIX.CLAUDE]: MODEL_PROVIDER.CLAUDE_CUSTOM,
-        [MODEL_PROTOCOL_PREFIX.GEMINI]: MODEL_PROVIDER.GEMINI_CLI,
-        [MODEL_PROTOCOL_PREFIX.OPENAI_RESPONSES]: MODEL_PROVIDER.OPENAI_CUSTOM_RESPONSES,
-    };
-    const fallbackProvider = defaultProviderByEndpoint[fromProvider] || CONFIG.MODEL_PROVIDER;
-    
-    const providerSelection = getProviderByModelName(rawModel, providerPoolManager, fallbackProvider);
-    const toProvider = providerSelection.providerType || fallbackProvider;
-    // Don't use the UUID from prefix-based selection as preferred UUID
-    // This would bypass the round-robin pool selection logic
-    const selectedProviderConfig = providerSelection.providerConfig;
-    
-    // Remove prefix from model name before sending to backend
-    let model = removeModelPrefix(rawModel);
-    
-    setImmediate(() => {
-        process.stdout.write(`[Provider Selection] Raw model: ${rawModel}, Clean model: ${model}\n`);
-        process.stdout.write(`[Provider Selection] Provider selection result: ${JSON.stringify({
-            providerType: toProvider,
-            hasProviderConfig: !!selectedProviderConfig,
-            uuid: selectedProviderConfig?.uuid,
-            vendorName: selectedProviderConfig?.vendorName,
-            hasModelMapping: !!selectedProviderConfig?.modelMapping
-        })}\n`);
-        process.stdout.write(`[Provider Selection] Selected provider type: ${toProvider}, will use round-robin selection\n`);
-        process.stdout.write(`[Provider Selection] Will pass requestedModel="${model}" to provider pool manager for filtering\n`);
-    });
 
-    // 3. Convert request body from client format to backend format, if necessary.
+    console.log(`\n[Content Generation] Model: ${model}, Stream: ${isStream}, Format: ${fromProvider}`);
+
+    // Convert Claude format to OpenAI format if needed
     let processedRequestBody = originalRequestBody;
-    // fs.writeFile('originalRequestBody'+Date.now()+'.json', JSON.stringify(originalRequestBody));
-    if (getProtocolPrefix(fromProvider) !== getProtocolPrefix(toProvider)) {
-        setImmediate(() => {
-            process.stdout.write(`[Request Convert] Converting request from ${fromProvider} to ${toProvider}\n`);
-        });
+    const toProvider = MODEL_PROTOCOL_PREFIX.OPENAI; // Always send to OpenAI upstream
+
+    if (fromProvider === MODEL_PROTOCOL_PREFIX.CLAUDE) {
+        console.log(`[Request Convert] Converting Claude format to OpenAI format`);
         processedRequestBody = convertData(originalRequestBody, 'request', fromProvider, toProvider);
     } else {
-        setImmediate(() => {
-            process.stdout.write(`[Request Convert] Request format matches backend provider. No conversion needed.\n`);
-        });
+        console.log(`[Request Convert] Already OpenAI format, no conversion needed`);
     }
 
-    setImmediate(() => {
-        process.stdout.write(`[Content Generation] Model: ${model}, Stream: ${isStream}\n`);
-    });
-
-    // 4. Apply system prompt from file if configured.
+    // Apply system prompt if configured
     processedRequestBody = await _applySystemPromptFromFile(CONFIG, processedRequestBody, toProvider);
     await _manageSystemPrompt(processedRequestBody, toProvider);
 
-    // 5. Log the incoming prompt (after potential conversion to the backend's format).
+    // Log prompt text
     const promptText = extractPromptText(processedRequestBody, toProvider);
     await logConversation('input', promptText, CONFIG.PROMPT_LOG_MODE, PROMPT_LOG_FILENAME);
-    
-    // 6. Get the correct service for the selected provider
-    // Note: We don't pass uuid here to enable round-robin selection
-    // The pool manager will select a provider based on requestedModel filtering
-    const correctService = await getApiService({ ...CONFIG, MODEL_PROVIDER: toProvider, requestedModel: model }, providerPoolManager);
-    
-    // Log detailed request information
-    // Extract baseUrl and config from the underlying service based on provider type
-    let baseUrl = 'N/A';
-    let actualVendorName = 'unknown';
-    let actualConfig = null;
-    let userAgent = 'N/A';
-    
-    if (correctService.openAIApiService) {
-        baseUrl = correctService.openAIApiService.baseUrl;
-        actualConfig = correctService.openAIApiService.config;
-        actualVendorName = actualConfig?.vendorName || 'unknown';
-        userAgent = actualConfig?.userAgent || 'N/A';
-    } else if (correctService.openAIResponsesApiService) {
-        baseUrl = correctService.openAIResponsesApiService.baseUrl;
-        actualConfig = correctService.openAIResponsesApiService.config;
-        actualVendorName = actualConfig?.vendorName || 'unknown';
-        userAgent = actualConfig?.userAgent || 'N/A';
-    } else if (correctService.claudeApiService) {
-        baseUrl = correctService.claudeApiService.baseUrl;
-        actualConfig = correctService.claudeApiService.config;
-        actualVendorName = actualConfig?.vendorName || 'unknown';
-        userAgent = actualConfig?.userAgent || 'N/A';
-    } else if (correctService.geminiApiService) {
-        baseUrl = 'Google Cloud API (OAuth)';
-        actualConfig = correctService.geminiApiService.config;
-        actualVendorName = actualConfig?.vendorName || 'gemini-cli';
-    } else if (correctService.kiroApiService) {
-        baseUrl = 'Kiro API (OAuth)';
-        actualConfig = correctService.kiroApiService.config;
-        actualVendorName = actualConfig?.vendorName || 'kiro';
-    } else if (correctService.qwenApiService) {
-        baseUrl = 'Qwen API (OAuth)';
-        actualConfig = correctService.qwenApiService.config;
-        actualVendorName = actualConfig?.vendorName || 'qwen';
-    }
-    
-    const actualUuid = actualConfig?.uuid || selectedProviderUuid || 'N/A';
-    
-    setImmediate(() => {
-        process.stdout.write(`\n========== REQUEST INFO ==========\n`);
-        process.stdout.write(`[Request] Provider Type: ${toProvider}\n`);
-        process.stdout.write(`[Request] Vendor Name: ${actualVendorName}\n`);
-        process.stdout.write(`[Request] Provider UUID: ${actualUuid}\n`);
-        process.stdout.write(`[Request] Base URL: ${baseUrl}\n`);
-        process.stdout.write(`[Request] User-Agent: ${userAgent}\n`);
-        process.stdout.write(`[Request] Model: ${model}\n`);
-        process.stdout.write(`[Request] Stream: ${isStream}\n`);
-        process.stdout.write(`==================================\n\n`);
-    });
-    
-    // 7. Call the appropriate stream or unary handler, passing the provider info.
+
+    // Log upstream request info
+    console.log(`\n=== API REQUEST INFO === (to upstream)`);
+    console.log(`Upstream: ${CONFIG.OPENAI_BASE_URL}`);
+    console.log(`Model: ${model}`);
+    console.log(`Stream: ${isStream}`);
+    console.log(`${'='.repeat(60)}\n`);
+
+    // Call appropriate handler (use passed-in service directly)
     if (isStream) {
-        await handleStreamRequest(res, correctService, model, processedRequestBody, fromProvider, toProvider, CONFIG.PROMPT_LOG_MODE, PROMPT_LOG_FILENAME, providerPoolManager, pooluuid);
+        await handleStreamRequest(res, service, model, processedRequestBody, fromProvider, toProvider, CONFIG.PROMPT_LOG_MODE, PROMPT_LOG_FILENAME);
     } else {
-        await handleUnaryRequest(res, correctService, model, processedRequestBody, fromProvider, toProvider, CONFIG.PROMPT_LOG_MODE, PROMPT_LOG_FILENAME, providerPoolManager, pooluuid);
+        await handleUnaryRequest(res, service, model, processedRequestBody, fromProvider, toProvider, CONFIG.PROMPT_LOG_MODE, PROMPT_LOG_FILENAME);
     }
 }
 
