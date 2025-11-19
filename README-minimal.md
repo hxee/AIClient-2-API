@@ -20,50 +20,53 @@ cd AIClient-2-API
 # 切换到精简分支
 git checkout minimal-openai-proxy
 
-# 安装依赖
+# 安装依赖（仅3个核心包）
 npm install
 ```
 
 ## 🚀 快速开始
 
-### 1. 基本启动
+### 方法1: 使用 run.bat（推荐 - Windows）
 
-```bash
-node src/api-server.js \
-  --openai-api-key YOUR_OPENAI_API_KEY \
-  --openai-base-url https://api.openai.com/v1
+1. 编辑 `config.json`，设置你的 OpenAI API Key：
+```json
+{
+  "OPENAI_API_KEY": "sk-your-openai-api-key-here",
+  "OPENAI_BASE_URL": "https://api.openai.com/v1"
+}
 ```
 
-### 2. 自定义配置
+2. 双击 `run.bat` 启动服务器
 
-```bash
-node src/api-server.js \
-  --host 0.0.0.0 \
-  --port 8080 \
-  --api-key your-secret-key \
-  --openai-api-key YOUR_OPENAI_API_KEY \
-  --openai-base-url https://api.openai.com/v1
-```
+### 方法2: 使用配置文件
 
-### 3. 使用配置文件
-
-创建 `config.json`:
+创建/编辑 `config.json`:
 
 ```json
 {
   "HOST": "127.0.0.1",
   "SERVER_PORT": 3000,
   "REQUIRED_API_KEY": "admin123",
-  "OPENAI_API_KEY": "sk-your-key",
+  "OPENAI_API_KEY": "sk-your-openai-api-key-here",
   "OPENAI_BASE_URL": "https://api.openai.com/v1",
-  "PROMPT_LOG_MODE": "console"
+  "SYSTEM_PROMPT_FILE_PATH": "input_system_prompt.txt",
+  "SYSTEM_PROMPT_MODE": "append",
+  "PROMPT_LOG_MODE": "none"
 }
 ```
 
-然后直接启动：
+然后启动：
 
 ```bash
 node src/api-server.js
+```
+
+### 方法3: 使用命令行参数
+
+```bash
+node src/api-server.js \
+  --openai-api-key YOUR_OPENAI_API_KEY \
+  --openai-base-url https://api.openai.com/v1
 ```
 
 ## 🌐 API 端点
@@ -161,8 +164,10 @@ curl -H "Authorization: Bearer your-api-key" http://localhost:3000/v1/models
 
 | 项目 | 完整版 | 精简版 | 优化 |
 |------|--------|--------|------|
-| 文件数量 | ~35 | ~15 | **57% ↓** |
-| 代码行数 | ~5000+ | ~1800 | **64% ↓** |
+| 文件数量 | ~60 | 24 | **60% ↓** |
+| 代码行数 | ~27000+ | ~2000 | **93% ↓** |
+| NPM 依赖包 | 13 | 3 | **77% ↓** |
+| node_modules | 461 | 8 | **98% ↓** |
 | 启动时间 | ~2s | <0.5s | **75% ↓** |
 | 支持的提供商 | 多个 | OpenAI | 专注核心 |
 | UI管理界面 | ✅ | ❌ | 减少复杂度 |
