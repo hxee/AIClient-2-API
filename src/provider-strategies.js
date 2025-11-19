@@ -1,26 +1,22 @@
-import { MODEL_PROTOCOL_PREFIX } from './common.js';
-import { GeminiStrategy } from './gemini/gemini-strategy.js';
-import { OpenAIStrategy } from './openai/openai-strategy.js';
-import { ClaudeStrategy } from './claude/claude-strategy.js';
-import { ResponsesAPIStrategy } from './openai/openai-responses-strategy.js';
 /**
- * Strategy factory that returns the appropriate strategy instance based on the provider protocol.
+ * Provider Strategies - Minimal version
+ * Only supports OpenAI and Claude strategies
  */
-class ProviderStrategyFactory {
-    static getStrategy(providerProtocol) {
-        switch (providerProtocol) {
-            case MODEL_PROTOCOL_PREFIX.GEMINI:
-                return new GeminiStrategy();
-            case MODEL_PROTOCOL_PREFIX.OPENAI:
-                return new OpenAIStrategy();
-            case MODEL_PROTOCOL_PREFIX.OPENAI_RESPONSES:
-                return new ResponsesAPIStrategy();
-            case MODEL_PROTOCOL_PREFIX.CLAUDE:
-                return new ClaudeStrategy();
-            default:
-                throw new Error(`Unsupported provider protocol: ${providerProtocol}`);
+
+import { OpenAIStrategy } from './openai/openai-strategy.js';
+
+export class ProviderStrategyFactory {
+    static strategies = {
+        'openai': new OpenAIStrategy(),
+        'claude': new OpenAIStrategy() // Claude requests will be converted to OpenAI format
+    };
+
+    static getStrategy(provider) {
+        const strategy = this.strategies[provider];
+        if (!strategy) {
+            console.warn(`[Strategy] No strategy for provider "${provider}", using OpenAI strategy as fallback`);
+            return this.strategies['openai'];
         }
+        return strategy;
     }
 }
-
-export { ProviderStrategyFactory };

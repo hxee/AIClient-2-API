@@ -1,10 +1,8 @@
 node_modules
-.serena/
 .claude/
-CLAUDE.md
-config.json
+.bmad-core/
 fetch_system_prompt.txt
 input_system_prompt.txt
-.kiro/
 configs
+config.json
 provider.json
