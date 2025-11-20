@@ -10,7 +10,6 @@ import {
     cleanJsonSchemaProperties as cleanJsonSchema,
     determineReasoningEffortFromBudget
 } from '../utils.js';
-import { MODEL_PROTOCOL_PREFIX } from '../../common.js';
 import {
     generateResponseCreated,
     generateResponseInProgress,
@@ -36,11 +35,11 @@ export class ClaudeConverter extends BaseConverter {
      */
     convertRequest(data, targetProtocol) {
         switch (targetProtocol) {
-            case MODEL_PROTOCOL_PREFIX.OPENAI:
+            case 'openai':
                 return this.toOpenAIRequest(data);
-            case MODEL_PROTOCOL_PREFIX.GEMINI:
+            case 'gemini':
                 return this.toGeminiRequest(data);
-            case MODEL_PROTOCOL_PREFIX.OPENAI_RESPONSES:
+            case 'openaiResponses':
                 return this.toOpenAIResponsesRequest(data);
             default:
                 throw new Error(`Unsupported target protocol: ${targetProtocol}`);
@@ -52,11 +51,11 @@ export class ClaudeConverter extends BaseConverter {
      */
     convertResponse(data, targetProtocol, model) {
         switch (targetProtocol) {
-            case MODEL_PROTOCOL_PREFIX.OPENAI:
+            case 'openai':
                 return this.toOpenAIResponse(data, model);
-            case MODEL_PROTOCOL_PREFIX.GEMINI:
+            case 'gemini':
                 return this.toGeminiResponse(data, model);
-            case MODEL_PROTOCOL_PREFIX.OPENAI_RESPONSES:
+            case 'openaiResponses':
                 return this.toOpenAIResponsesResponse(data, model);
             default:
                 throw new Error(`Unsupported target protocol: ${targetProtocol}`);
@@ -68,11 +67,11 @@ export class ClaudeConverter extends BaseConverter {
      */
     convertStreamChunk(chunk, targetProtocol, model) {
         switch (targetProtocol) {
-            case MODEL_PROTOCOL_PREFIX.OPENAI:
+            case 'openai':
                 return this.toOpenAIStreamChunk(chunk, model);
-            case MODEL_PROTOCOL_PREFIX.GEMINI:
+            case 'gemini':
                 return this.toGeminiStreamChunk(chunk, model);
-            case MODEL_PROTOCOL_PREFIX.OPENAI_RESPONSES:
+            case 'openaiResponses':
                 return this.toOpenAIResponsesStreamChunk(chunk, model);
             default:
                 throw new Error(`Unsupported target protocol: ${targetProtocol}`);
@@ -84,9 +83,9 @@ export class ClaudeConverter extends BaseConverter {
      */
     convertModelList(data, targetProtocol) {
         switch (targetProtocol) {
-            case MODEL_PROTOCOL_PREFIX.OPENAI:
+            case 'openai':
                 return this.toOpenAIModelList(data);
-            case MODEL_PROTOCOL_PREFIX.GEMINI:
+            case 'gemini':
                 return this.toGeminiModelList(data);
             default:
                 return data;
@@ -621,6 +620,11 @@ export class ClaudeConverter extends BaseConverter {
      * 处理Claude内容到OpenAI格式
      */
     processClaudeContentToOpenAIContent(content) {
+        // 处理字符串内容
+        if (typeof content === 'string') {
+            return content;
+        }
+
         if (!content || !Array.isArray(content)) return [];
         
         const contentArray = [];

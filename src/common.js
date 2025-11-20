@@ -1,227 +1,13 @@
 import { promises as fs } from 'fs';
 import * as path from 'path';
-import * as http from 'http'; // Add http for IncomingMessage and ServerResponse types
-import * as crypto from 'crypto'; // Import crypto for MD5 hashing
-import { ApiServiceAdapter } from './adapter.js'; // Import ApiServiceAdapter
-import { convertData, getOpenAIStreamChunkStop, getOpenAIResponsesStreamChunkBegin, getOpenAIResponsesStreamChunkEnd } from './convert.js';
+import { convertData, getOpenAIStreamChunkStop } from './convert.js';
 import { ProviderStrategyFactory } from './provider-strategies.js';
-import { getApiService } from './service-manager.js';
 
-export const API_ACTIONS = {
-    GENERATE_CONTENT: 'generateContent',
-    STREAM_GENERATE_CONTENT: 'streamGenerateContent',
-};
+// ============================================================
+// 核心常量定义 - 只保留必要的端点类型
+// ============================================================
 
-export const MODEL_PROTOCOL_PREFIX = {
-    // Model provider constants
-    GEMINI: 'gemini',
-    OPENAI: 'openai',
-    OPENAI_RESPONSES: 'openaiResponses',
-    CLAUDE: 'claude',
-    OLLAMA: 'ollama',
-}
-
-export const MODEL_PROVIDER = {
-    // Model provider constants
-    GEMINI_CLI: 'gemini-cli-oauth',
-    OPENAI_CUSTOM: 'openai-custom',
-    OPENAI_CUSTOM_RESPONSES: 'openaiResponses-custom',
-    CLAUDE_CUSTOM: 'claude-custom',
-    KIRO_API: 'claude-kiro-oauth',
-    QWEN_API: 'openai-qwen-oauth',
-}
-
-/**
- * Generate display prefix for a provider type
- * Supports compound provider names like "openai-custom-anyrouter"
- * @param {string} providerType - Provider type key (e.g., "openai-custom-anyrouter")
- * @returns {string} Display prefix (e.g., "[OpenAI-AnyRouter]")
- */
-export function getProviderDisplayPrefix(providerType) {
-    if (!providerType) return '';
-    
-    // Parse provider type: {protocol}-{source}[-{vendor}]
-    const parts = providerType.split('-');
-    
-    if (parts.length === 0) return '';
-    
-    // Capitalize first letter of each part
-    const capitalize = (str) => str.charAt(0).toUpperCase() + str.slice(1);
-    
-    // Handle known provider type patterns
-    if (parts.length === 2) {
-        // e.g., "openai-custom" -> "[OpenAI]"
-        // e.g., "gemini-cli" -> "[Gemini CLI]"
-        const protocol = capitalize(parts[0]);
-        const source = parts[1] === 'oauth' ? 'CLI' : capitalize(parts[1]);
-        
-        // Special handling for standard providers
-        if (parts[1] === 'custom') {
-            return `[${protocol}]`;
-        }
-        return `[${protocol} ${source}]`;
-    } else if (parts.length >= 3) {
-        // e.g., "openai-custom-anyrouter" -> "[OpenAI-AnyRouter]"
-        // e.g., "claude-kiro-oauth" -> "[Claude-Kiro]"
-        const protocol = capitalize(parts[0]);
-        const vendor = parts.slice(2).map(capitalize).join('-');
-        return `[${protocol}-${vendor}]`;
-    } else {
-        // Fallback for single part
-        return `[${capitalize(parts[0])}]`;
-    }
-}
-
-/**
- * Model name prefix mapping for different providers
- * These prefixes are added to model names in the list for user visibility
- * but are removed before sending to actual providers
- */
-export const MODEL_PREFIX_MAP = {
-    [MODEL_PROVIDER.KIRO_API]: '[Kiro]',
-    [MODEL_PROVIDER.CLAUDE_CUSTOM]: '[Claude]',
-    [MODEL_PROVIDER.GEMINI_CLI]: '[Gemini CLI]',
-    [MODEL_PROVIDER.OPENAI_CUSTOM]: '[OpenAI]',
-    [MODEL_PROVIDER.QWEN_API]: '[Qwen CLI]',
-    [MODEL_PROVIDER.OPENAI_CUSTOM_RESPONSES]: '[OpenAI Responses]',
-}
-
-// Removed: PROVIDER_ALIAS and ALIAS_TO_PROVIDER_TYPES (not needed in minimal version)
-
-/**
- * Extracts the protocol prefix from a given model provider string.
- * This is used to determine if two providers belong to the same underlying protocol (e.g., gemini, openai, claude).
- * @param {string} provider - The model provider string (e.g., 'gemini-cli', 'openai-custom').
- * @returns {string} The protocol prefix (e.g., 'gemini', 'openai', 'claude').
- */
-export function getProtocolPrefix(provider) {
-    const hyphenIndex = provider.indexOf('-');
-    if (hyphenIndex !== -1) {
-        const prefix = provider.substring(0, hyphenIndex);
-        return prefix;
-    }
-    return provider; // Return original if no hyphen is found
-}
-
-/**
- * Adds provider prefix to model name for display purposes
- * @param {string} modelName - Original model name
- * @param {string} provider - Provider type
- * @returns {string} Model name with prefix
- */
-export function addModelPrefix(modelName, provider, options = {}) {
-    if (!modelName) return modelName;
-    
-    // Don't add prefix if already exists
-    if (/^\[.*?\]\s+/.test(modelName)) {
-        return modelName;
-    }
-    
-    // Use alias from PROVIDER_ALIAS directly, without adding vendorName
-    const alias = PROVIDER_ALIAS[provider];
-    
-    let prefixText = alias || '';
-    if (!prefixText) {
-        const dynamic = getProviderDisplayPrefix(provider);
-        if (dynamic && dynamic !== '[]') {
-            prefixText = dynamic.replace(/^\[|\]$/g, '').toLowerCase();
-        } else {
-            prefixText = provider;
-        }
-    }
-    
-    return `[${prefixText}] ${modelName}`;
-}
-
-/**
- * Removes provider prefix from model name before sending to provider
- * @param {string} modelName - Model name with possible prefix
- * @returns {string} Clean model name without prefix
- */
-export function removeModelPrefix(modelName) {
-    if (!modelName) {
-        return modelName;
-    }
-    
-    // Remove any prefix pattern like [Kiro], [Gemini], etc.
-    const prefixPattern = /^\[.*?\]\s+/;
-    return modelName.replace(prefixPattern, '');
-}
-
-/**
- * Extracts provider type from prefixed model name
- * @param {string} modelName - Model name with possible prefix
- * @returns {string|null} Provider type or null if no prefix found
- */
-export function getProviderFromPrefix(modelName) {
-    if (!modelName) {
-        return null;
-    }
-    
-    const match = modelName.match(/^\[(.*?)\]/);
-    if (!match) {
-        return null;
-    }
-    
-    const prefixText = `[${match[1]}]`;
-    
-    // Find provider by prefix
-    for (const [provider, prefix] of Object.entries(MODEL_PREFIX_MAP)) {
-        if (prefix === prefixText) {
-            return provider;
-        }
-    }
-    
-    return null;
-}
-
-/**
- * Adds provider prefix to array of models (works with any format)
- * @param {Array} models - Array of model objects
- * @param {string} provider - Provider type
- * @param {string} format - Format type ('openai', 'gemini', 'ollama')
- * @returns {Array} Models with prefixed names
- */
-export function addPrefixToModels(models, provider, format = 'openai', providerInfo = {}) {
-    if (!Array.isArray(models)) return models;
-    
-    const prefixOptions = {
-        vendorName: providerInfo.vendorName,
-        providerUuid: providerInfo.uuid
-    };
-    
-    return models.map(model => {
-        if (format === 'openai') {
-            return { ...model, id: addModelPrefix(model.id, provider, prefixOptions) };
-        } else if (format === 'ollama') {
-            return {
-                ...model,
-                name: addModelPrefix(model.name, provider, prefixOptions),
-                model: addModelPrefix(model.model || model.name, provider, prefixOptions)
-            };
-        } else {
-            // gemini/claude format
-            return {
-                ...model,
-                name: addModelPrefix(model.name, provider, prefixOptions),
-                displayName: model.displayName ? addModelPrefix(model.displayName, provider, prefixOptions) : undefined
-            };
-        }
-    });
-}
-
-/**
- * Extract vendor name from model prefix
- * @param {string} modelName - Model name with prefix like "[OpenAI-AnyRouter] model"
- * @returns {{protocol: string|null, vendor: string|null, providerUuid: string|null}} Protocol, vendor and provider uuid
- */
-// Removed: extractPrefixInfo (not needed in minimal version - no provider prefixes)
-
-// Removed: findMatchingProviderKey (not needed in minimal version - no provider pools)
-
-// Removed: getProviderByModelName (not needed in minimal version - direct OpenAI service)
-
-// Minimal version: Only OpenAI and Claude endpoints
+// Minimal version: 只支持 OpenAI 和 Claude 端点
 export const ENDPOINT_TYPE = {
     OPENAI_CHAT: 'openai-chat',
     CLAUDE_MESSAGE: 'claude-message',
@@ -231,24 +17,29 @@ export const ENDPOINT_TYPE = {
 export const FETCH_SYSTEM_PROMPT_FILE = path.join(process.cwd(), 'fetch_system_prompt.txt');
 export const INPUT_SYSTEM_PROMPT_FILE = path.join(process.cwd(), 'input_system_prompt.txt');
 
-export function formatExpiryTime(expiryTimestamp) {
-    if (!expiryTimestamp || typeof expiryTimestamp !== 'number') return "No expiry date available";
-    const diffMs = expiryTimestamp - Date.now();
-    if (diffMs <= 0) return "Token has expired";
-    let totalSeconds = Math.floor(diffMs / 1000);
-    const hours = Math.floor(totalSeconds / 3600);
-    totalSeconds %= 3600;
-    const minutes = Math.floor(totalSeconds / 60);
-    const seconds = totalSeconds % 60;
-    const pad = (num) => String(num).padStart(2, '0');
-    return `${pad(hours)}h ${pad(minutes)}m ${pad(seconds)}s`;
+// ============================================================
+// 工具函数
+// ============================================================
+
+/**
+ * 从提供商字符串中提取协议前缀
+ * 精简版：只处理 'openai' 和 'claude'
+ * @param {string} provider - 提供商字符串（例如 'openai-custom', 'claude-custom'）
+ * @returns {string} 协议前缀（'openai' 或 'claude'）
+ */
+export function getProtocolPrefix(provider) {
+    const hyphenIndex = provider.indexOf('-');
+    if (hyphenIndex !== -1) {
+        return provider.substring(0, hyphenIndex);
+    }
+    return provider;
 }
 
 /**
- * Reads the entire request body from an HTTP request.
- * @param {http.IncomingMessage} req - The HTTP request object.
- * @returns {Promise<Object>} A promise that resolves with the parsed JSON request body.
- * @throws {Error} If the request body is not valid JSON.
+ * 读取完整的 HTTP 请求体
+ * @param {http.IncomingMessage} req - HTTP 请求对象
+ * @returns {Promise<Object>} 解析后的 JSON 请求体
+ * @throws {Error} 如果请求体不是有效的 JSON
  */
 export function getRequestBody(req) {
     return new Promise((resolve, reject) => {
@@ -272,6 +63,13 @@ export function getRequestBody(req) {
     });
 }
 
+/**
+ * 记录对话日志
+ * @param {string} type - 日志类型（'input' 或 'output'）
+ * @param {string} content - 日志内容
+ * @param {string} logMode - 日志模式（'none', 'console', 'file'）
+ * @param {string} logFilename - 日志文件名
+ */
 export async function logConversation(type, content, logMode, logFilename) {
     if (logMode === 'none') return;
     if (!content) return;
@@ -283,7 +81,6 @@ export async function logConversation(type, content, logMode, logFilename) {
         console.log(logEntry);
     } else if (logMode === 'file') {
         try {
-            // Append to the file
             await fs.appendFile(logFilename, logEntry);
         } catch (err) {
             console.error(`[Error] Failed to write conversation log to ${logFilename}:`, err);
@@ -292,19 +89,19 @@ export async function logConversation(type, content, logMode, logFilename) {
 }
 
 /**
- * Checks if the request is authorized based on API key.
- * @param {http.IncomingMessage} req - The HTTP request object.
- * @param {URL} requestUrl - The parsed URL object.
- * @param {string} REQUIRED_API_KEY - The API key required for authorization.
- * @returns {boolean} True if authorized, false otherwise.
+ * 检查请求是否已授权（基于 API 密钥）
+ * 精简版：只保留必要的授权头检查
+ * @param {http.IncomingMessage} req - HTTP 请求对象
+ * @param {URL} requestUrl - 解析后的 URL 对象
+ * @param {string} REQUIRED_API_KEY - 所需的 API 密钥
+ * @returns {boolean} 如果已授权则返回 true，否则返回 false
  */
 export function isAuthorized(req, requestUrl, REQUIRED_API_KEY) {
     const authHeader = req.headers['authorization'];
     const queryKey = requestUrl.searchParams.get('key');
-    const googApiKey = req.headers['x-goog-api-key'];
-    const claudeApiKey = req.headers['x-api-key']; // Claude-specific header
+    const claudeApiKey = req.headers['x-api-key']; // Claude 风格的头部
 
-    // Check for Bearer token in Authorization header (OpenAI style)
+    // 检查 Authorization 头中的 Bearer token（OpenAI 风格）
     if (authHeader && authHeader.startsWith('Bearer ')) {
         const token = authHeader.substring(7);
         if (token === REQUIRED_API_KEY) {
@@ -312,75 +109,85 @@ export function isAuthorized(req, requestUrl, REQUIRED_API_KEY) {
         }
     }
 
-    // Check for API key in URL query parameter (Gemini style)
+    // 检查 URL 查询参数中的 API 密钥
     if (queryKey === REQUIRED_API_KEY) {
         return true;
     }
 
-    // Check for API key in x-goog-api-key header (Gemini style)
-    if (googApiKey === REQUIRED_API_KEY) {
-        return true;
-    }
-
-    // Check for API key in x-api-key header (Claude style)
+    // 检查 x-api-key 头（Claude 风格）
     if (claudeApiKey === REQUIRED_API_KEY) {
         return true;
     }
 
-    console.log(`[Auth] Unauthorized request denied. Bearer: "${authHeader ? 'present' : 'N/A'}", Query Key: "${queryKey}", x-goog-api-key: "${googApiKey}", x-api-key: "${claudeApiKey}"`);
+    console.log(`[Auth] Unauthorized request denied. Bearer: "${authHeader ? 'present' : 'N/A'}", Query Key: "${queryKey}", x-api-key: "${claudeApiKey}"`);
     return false;
 }
 
+// ============================================================
+// 响应处理
+// ============================================================
+
 /**
- * Handles the common logic for sending API responses (unary and stream).
- * This includes writing response headers, logging conversation, and logging auth token expiry.
- * @param {http.ServerResponse} res - The HTTP response object.
- * @param {Object} responsePayload - The actual response payload (string for unary, object for stream chunks).
- * @param {boolean} isStream - Whether the response is a stream.
+ * 处理统一响应的通用逻辑（非流式和流式）
+ * @param {http.ServerResponse} res - HTTP 响应对象
+ * @param {Object} responsePayload - 实际的响应负载
+ * @param {boolean} isStream - 是否为流式响应
  */
 export async function handleUnifiedResponse(res, responsePayload, isStream) {
     if (isStream) {
-        res.writeHead(200, { "Content-Type": "text/event-stream", "Cache-Control": "no-cache", "Connection": "keep-alive", "Transfer-Encoding": "chunked" });
+        res.writeHead(200, {
+            "Content-Type": "text/event-stream",
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "Transfer-Encoding": "chunked"
+        });
     } else {
         res.writeHead(200, { 'Content-Type': 'application/json' });
     }
 
-    if (isStream) {
-        // Stream chunks are handled by the calling function that iterates the stream
-    } else {
+    if (!isStream) {
         res.end(responsePayload);
     }
 }
 
+/**
+ * 处理流式请求
+ * @param {http.ServerResponse} res - HTTP 响应对象
+ * @param {ApiServiceAdapter} service - API 服务适配器
+ * @param {string} model - 模型名称
+ * @param {Object} requestBody - 请求体
+ * @param {string} fromProvider - 客户端协议（'openai' 或 'claude'）
+ * @param {string} toProvider - 上游协议（始终为 'openai'）
+ * @param {string} PROMPT_LOG_MODE - 提示词日志模式
+ * @param {string} PROMPT_LOG_FILENAME - 提示词日志文件名
+ */
 export async function handleStreamRequest(res, service, model, requestBody, fromProvider, toProvider, PROMPT_LOG_MODE, PROMPT_LOG_FILENAME) {
     let fullResponseText = '';
-    let fullResponseJson = '';
-    let fullOldResponseJson = '';
     let responseClosed = false;
 
     await handleUnifiedResponse(res, '', true);
 
-    // fs.writeFile('request'+Date.now()+'.json', JSON.stringify(requestBody));
-    // The service returns a stream in its native format (toProvider).
     const needsConversion = getProtocolPrefix(fromProvider) !== getProtocolPrefix(toProvider);
     requestBody.model = model;
     const nativeStream = await service.generateContentStream(model, requestBody);
-    const addEvent = getProtocolPrefix(fromProvider) === MODEL_PROTOCOL_PREFIX.CLAUDE || getProtocolPrefix(fromProvider) === MODEL_PROTOCOL_PREFIX.OPENAI_RESPONSES;
-    const openStop = getProtocolPrefix(fromProvider) === MODEL_PROTOCOL_PREFIX.OPENAI ;
+
+    // 判断是否需要添加 event 前缀（Claude 格式需要）
+    const addEvent = getProtocolPrefix(fromProvider) === 'claude';
+    // 判断是否需要发送结束标记（OpenAI 格式需要）
+    const openStop = getProtocolPrefix(fromProvider) === 'openai';
 
     try {
         for await (const nativeChunk of nativeStream) {
-            // Extract text for logging purposes
+            // 提取文本用于日志记录
             const chunkText = extractResponseText(nativeChunk, toProvider);
             if (chunkText && !Array.isArray(chunkText)) {
                 fullResponseText += chunkText;
-                // 使用非阻塞的 stdout 写入来实时显示流式内容
                 if (process.stdout.isTTY) {
                     process.stdout.write(chunkText);
                 }
             }
 
-            // Convert the complete chunk object to the client's format (fromProvider), if necessary.
+            // 如果需要，将完整的块对象转换为客户端格式
             const chunkToSend = needsConversion
                 ? convertData(nativeChunk, 'streamChunk', toProvider, fromProvider, model)
                 : nativeChunk;
@@ -394,34 +201,28 @@ export async function handleStreamRequest(res, service, model, requestBody, from
 
             for (const chunk of chunksToSend) {
                 if (addEvent) {
-                    // fullOldResponseJson += chunk.type+"\n";
-                    // fullResponseJson += chunk.type+"\n";
                     res.write(`event: ${chunk.type}\n`);
-                    // 使用 process.stdout.write 代替 console.log 实现非阻塞输出
                     if (process.env.DEBUG_STREAM) {
                         process.stdout.write(`event: ${chunk.type}\n`);
                     }
                 }
 
-                // fullOldResponseJson += JSON.stringify(chunk)+"\n";
-                // fullResponseJson += JSON.stringify(chunk)+"\n\n";
                 res.write(`data: ${JSON.stringify(chunk)}\n\n`);
-                // 使用 process.stdout.write 代替 console.log 实现非阻塞输出
                 if (process.env.DEBUG_STREAM) {
                     process.stdout.write(`data: ${JSON.stringify(chunk)}\n`);
                 }
             }
         }
+
+        // 如果是 OpenAI 格式且需要转换，发送结束标记
         if (openStop && needsConversion) {
             res.write(`data: ${JSON.stringify(getOpenAIStreamChunkStop(model))}\n\n`);
-            // 使用 process.stdout.write 代替 console.log 实现非阻塞输出
             if (process.env.DEBUG_STREAM) {
                 process.stdout.write(`data: ${JSON.stringify(getOpenAIStreamChunkStop(model))}\n`);
             }
         }
 
-    }  catch (error) {
-        // 使用 process.stderr.write 代替 console.error 实现非阻塞错误输出
+    } catch (error) {
         process.stderr.write(`\n[Server] Error during stream processing: ${error.stack}\n`);
 
         if (!res.writableEnded) {
@@ -434,27 +235,33 @@ export async function handleStreamRequest(res, service, model, requestBody, from
         if (!responseClosed) {
             res.end();
         }
-        // 在流结束后输出换行符
         if (process.stdout.isTTY && fullResponseText) {
             process.stdout.write('\n');
         }
         await logConversation('output', fullResponseText, PROMPT_LOG_MODE, PROMPT_LOG_FILENAME);
-        // fs.writeFile('oldResponseChunk'+Date.now()+'.json', fullOldResponseJson);
-        // fs.writeFile('responseChunk'+Date.now()+'.json', fullResponseJson);
     }
 }
 
+/**
+ * 处理非流式请求
+ * @param {http.ServerResponse} res - HTTP 响应对象
+ * @param {ApiServiceAdapter} service - API 服务适配器
+ * @param {string} model - 模型名称
+ * @param {Object} requestBody - 请求体
+ * @param {string} fromProvider - 客户端协议（'openai' 或 'claude'）
+ * @param {string} toProvider - 上游协议（始终为 'openai'）
+ * @param {string} PROMPT_LOG_MODE - 提示词日志模式
+ * @param {string} PROMPT_LOG_FILENAME - 提示词日志文件名
+ */
 export async function handleUnaryRequest(res, service, model, requestBody, fromProvider, toProvider, PROMPT_LOG_MODE, PROMPT_LOG_FILENAME) {
-    try{
+    try {
         setImmediate(() => {
             process.stdout.write(`[Unary Request] Starting content generation - fromProvider: ${fromProvider}, toProvider: ${toProvider}, model: ${model}\n`);
         });
-        
-        // The service returns the response in its native format (toProvider).
+
         const needsConversion = getProtocolPrefix(fromProvider) !== getProtocolPrefix(toProvider);
         requestBody.model = model;
-        // fs.writeFile('oldRequest'+Date.now()+'.json', JSON.stringify(requestBody));
-        
+
         setImmediate(() => {
             process.stdout.write(`[Unary Request] Calling service.generateContent...\n`);
         });
@@ -462,10 +269,10 @@ export async function handleUnaryRequest(res, service, model, requestBody, fromP
         setImmediate(() => {
             process.stdout.write(`[Unary Request] ✓ Received response from service\n`);
         });
-        
+
         const responseText = extractResponseText(nativeResponse, toProvider);
 
-        // Convert the response back to the client's format (fromProvider), if necessary.
+        // 如果需要，将响应转换回客户端格式
         let clientResponse = nativeResponse;
         if (needsConversion) {
             setImmediate(() => {
@@ -482,13 +289,11 @@ export async function handleUnaryRequest(res, service, model, requestBody, fromP
         setImmediate(() => {
             process.stdout.write(`[Unary Request] ✓ Request completed successfully\n`);
         });
-        // fs.writeFile('oldResponse'+Date.now()+'.json', JSON.stringify(clientResponse));
     } catch (error) {
         setImmediate(() => {
             process.stderr.write(`\n[Server] Error during unary processing: ${error.stack}\n`);
         });
 
-        // 返回错误响应给客户端
         const errorResponse = {
             error: {
                 message: error.message || "An error occurred during processing.",
@@ -496,7 +301,7 @@ export async function handleUnaryRequest(res, service, model, requestBody, fromP
                 details: error.stack
             }
         };
-        
+
         setImmediate(() => {
             process.stdout.write(`[Unary Request] Sending error response to client\n`);
         });
@@ -504,24 +309,23 @@ export async function handleUnaryRequest(res, service, model, requestBody, fromP
     }
 }
 
+// ============================================================
+// 请求处理器
+// ============================================================
+
 /**
- * Handles requests for listing available models. It fetches models from the
- * service, transforms them to the format expected by the client (OpenAI, Claude, etc.),
- * and sends the JSON response.
- * @param {http.IncomingMessage} req The HTTP request object.
- * @param {http.ServerResponse} res The HTTP response object.
- * @param {ApiServiceAdapter} service The API service adapter.
- * @param {string} endpointType The type of endpoint being called (e.g., OPENAI_MODEL_LIST).
- * @param {Object} CONFIG - The server configuration object.
- */
-/**
- * Minimal version: Directly fetch models from upstream OpenAI API
+ * 处理模型列表请求
+ * 精简版：直接从上游 OpenAI API 获取模型
+ * @param {http.IncomingMessage} req - HTTP 请求对象
+ * @param {http.ServerResponse} res - HTTP 响应对象
+ * @param {ApiServiceAdapter} service - API 服务适配器
+ * @param {string} endpointType - 端点类型
+ * @param {Object} CONFIG - 服务器配置对象
  */
 export async function handleModelListRequest(req, res, service, endpointType, CONFIG) {
     const startTime = Date.now();
 
     try {
-        // Log request info from client
         console.log(`\n${'='.repeat(60)}`);
         console.log(`=== REQUEST INFO === (from client)`);
         console.log(`Time: ${new Date().toISOString()}`);
@@ -536,19 +340,17 @@ export async function handleModelListRequest(req, res, service, endpointType, CO
         console.log(`Endpoint Type: ${endpointType}`);
         console.log(`${'='.repeat(60)}`);
 
-        // Only support OpenAI format in minimal version
+        // 精简版只支持 OpenAI 格式
         if (endpointType !== 'openai-model-list') {
             throw new Error(`Unsupported endpoint type: ${endpointType}. Minimal version only supports openai-model-list`);
         }
 
-        // Log API request info to upstream
         console.log(`\n=== API REQUEST INFO === (to upstream)`);
         console.log(`Upstream: ${CONFIG.OPENAI_BASE_URL}`);
         console.log(`Endpoint: GET /models`);
         console.log(`API Key: ${CONFIG.OPENAI_API_KEY ? `${CONFIG.OPENAI_API_KEY.substring(0, 10)}...` : 'Not configured'}`);
         console.log(`${'='.repeat(60)}\n`);
 
-        // Fetch models from upstream OpenAI API
         console.log(`[ModelList] Fetching models from upstream...`);
         const modelsResponse = await service.listModels();
 
@@ -558,7 +360,7 @@ export async function handleModelListRequest(req, res, service, endpointType, CO
         console.log(`[ModelList] ✓ Fetched ${modelCount} models from upstream (${elapsed}ms)`);
         console.log(`[ModelList] Sending response to client\n`);
 
-        // Return the response from upstream directly
+        // 直接返回上游响应
         res.writeHead(200, {
             'Content-Type': 'application/json',
             'Access-Control-Allow-Origin': '*'
@@ -586,20 +388,18 @@ export async function handleModelListRequest(req, res, service, endpointType, CO
 }
 
 /**
- * Handles requests for content generation (both unary and streaming).
- * Minimal version: Direct OpenAI proxy with optional Claude format conversion.
- *
- * @param {http.IncomingMessage} req The HTTP request object.
- * @param {http.ServerResponse} res The HTTP response object.
- * @param {ApiServiceAdapter} service The API service adapter (OpenAI).
- * @param {string} endpointType The type of endpoint (openai-chat or claude-message).
- * @param {Object} CONFIG - The server configuration object.
- * @param {string} PROMPT_LOG_FILENAME - The prompt log filename.
+ * 处理内容生成请求（非流式和流式）
+ * 精简版：直接代理 OpenAI，可选的 Claude 格式转换
+ * @param {http.IncomingMessage} req - HTTP 请求对象
+ * @param {http.ServerResponse} res - HTTP 响应对象
+ * @param {ApiServiceAdapter} service - API 服务适配器（OpenAI）
+ * @param {string} endpointType - 端点类型（openai-chat 或 claude-message）
+ * @param {Object} CONFIG - 服务器配置对象
+ * @param {string} PROMPT_LOG_FILENAME - 提示词日志文件名
  */
 export async function handleContentGenerationRequest(req, res, service, endpointType, CONFIG, PROMPT_LOG_FILENAME) {
     const startTime = Date.now();
 
-    // Log request info from client
     console.log(`\n${'='.repeat(60)}`);
     console.log(`=== REQUEST INFO === (from client)`);
     console.log(`Time: ${new Date().toISOString()}`);
@@ -618,7 +418,6 @@ export async function handleContentGenerationRequest(req, res, service, endpoint
         throw new Error("Request body is missing for content generation.");
     }
 
-    // Log request body info
     console.log(`Request Body:`, JSON.stringify({
         model: originalRequestBody.model,
         stream: originalRequestBody.stream,
@@ -628,10 +427,10 @@ export async function handleContentGenerationRequest(req, res, service, endpoint
     }, null, 2));
     console.log(`${'='.repeat(60)}`);
 
-    // Determine format (OpenAI or Claude)
+    // 确定格式（OpenAI 或 Claude）
     const clientProviderMap = {
-        [ENDPOINT_TYPE.OPENAI_CHAT]: MODEL_PROTOCOL_PREFIX.OPENAI,
-        [ENDPOINT_TYPE.CLAUDE_MESSAGE]: MODEL_PROTOCOL_PREFIX.CLAUDE,
+        [ENDPOINT_TYPE.OPENAI_CHAT]: 'openai',
+        [ENDPOINT_TYPE.CLAUDE_MESSAGE]: 'claude',
     };
 
     const fromProvider = clientProviderMap[endpointType];
@@ -639,7 +438,7 @@ export async function handleContentGenerationRequest(req, res, service, endpoint
         throw new Error(`Unsupported endpoint type: ${endpointType}`);
     }
 
-    // Extract model and stream info
+    // 提取模型和流信息
     const { model, isStream } = _extractModelAndStreamInfo(req, originalRequestBody, fromProvider);
     if (!model) {
         throw new Error("Could not determine the model from the request.");
@@ -647,33 +446,32 @@ export async function handleContentGenerationRequest(req, res, service, endpoint
 
     console.log(`\n[Content Generation] Model: ${model}, Stream: ${isStream}, Format: ${fromProvider}`);
 
-    // Convert Claude format to OpenAI format if needed
+    // 如果需要，将 Claude 格式转换为 OpenAI 格式
     let processedRequestBody = originalRequestBody;
-    const toProvider = MODEL_PROTOCOL_PREFIX.OPENAI; // Always send to OpenAI upstream
+    const toProvider = 'openai'; // 始终发送到 OpenAI 上游
 
-    if (fromProvider === MODEL_PROTOCOL_PREFIX.CLAUDE) {
+    if (fromProvider === 'claude') {
         console.log(`[Request Convert] Converting Claude format to OpenAI format`);
         processedRequestBody = convertData(originalRequestBody, 'request', fromProvider, toProvider);
     } else {
         console.log(`[Request Convert] Already OpenAI format, no conversion needed`);
     }
 
-    // Apply system prompt if configured
+    // 应用系统提示词（如果配置了）
     processedRequestBody = await _applySystemPromptFromFile(CONFIG, processedRequestBody, toProvider);
     await _manageSystemPrompt(processedRequestBody, toProvider);
 
-    // Log prompt text
+    // 记录提示词文本
     const promptText = extractPromptText(processedRequestBody, toProvider);
     await logConversation('input', promptText, CONFIG.PROMPT_LOG_MODE, PROMPT_LOG_FILENAME);
 
-    // Log upstream request info
     console.log(`\n=== API REQUEST INFO === (to upstream)`);
     console.log(`Upstream: ${CONFIG.OPENAI_BASE_URL}`);
     console.log(`Model: ${model}`);
     console.log(`Stream: ${isStream}`);
     console.log(`${'='.repeat(60)}\n`);
 
-    // Call appropriate handler (use passed-in service directly)
+    // 调用适当的处理器
     if (isStream) {
         await handleStreamRequest(res, service, model, processedRequestBody, fromProvider, toProvider, CONFIG.PROMPT_LOG_MODE, PROMPT_LOG_FILENAME);
     } else {
@@ -681,67 +479,134 @@ export async function handleContentGenerationRequest(req, res, service, endpoint
     }
 }
 
+// ============================================================
+// 辅助函数
+// ============================================================
+
 /**
- * Helper function to extract model and stream information from the request.
- * @param {http.IncomingMessage} req The HTTP request object.
- * @param {Object} requestBody The parsed request body.
- * @param {string} fromProvider The type of endpoint being called.
- * @returns {{model: string, isStream: boolean}} An object containing the model name and stream status.
+ * 从请求中提取模型和流信息的辅助函数
+ * @param {http.IncomingMessage} req - HTTP 请求对象
+ * @param {Object} requestBody - 解析后的请求体
+ * @param {string} fromProvider - 被调用的端点类型
+ * @returns {{model: string, isStream: boolean}} 包含模型名称和流状态的对象
  */
 function _extractModelAndStreamInfo(req, requestBody, fromProvider) {
     const strategy = ProviderStrategyFactory.getStrategy(getProtocolPrefix(fromProvider));
     return strategy.extractModelAndStreamInfo(req, requestBody);
 }
 
+/**
+ * 从文件应用系统提示词
+ */
 async function _applySystemPromptFromFile(config, requestBody, toProvider) {
     const strategy = ProviderStrategyFactory.getStrategy(getProtocolPrefix(toProvider));
     return strategy.applySystemPromptFromFile(config, requestBody);
 }
 
+/**
+ * 管理系统提示词
+ */
 export async function _manageSystemPrompt(requestBody, provider) {
     const strategy = ProviderStrategyFactory.getStrategy(getProtocolPrefix(provider));
     await strategy.manageSystemPrompt(requestBody);
 }
 
-// Helper functions for content extraction and conversion (from convert.js, but needed here)
+/**
+ * 从响应中提取文本
+ */
 export function extractResponseText(response, provider) {
     const strategy = ProviderStrategyFactory.getStrategy(getProtocolPrefix(provider));
     return strategy.extractResponseText(response);
 }
 
+/**
+ * 从请求体中提取提示词文本
+ */
 export function extractPromptText(requestBody, provider) {
     const strategy = ProviderStrategyFactory.getStrategy(getProtocolPrefix(provider));
     return strategy.extractPromptText(requestBody);
 }
 
+/**
+ * 从请求体中提取系统提示词
+ * 精简版：只支持 OpenAI 和 Claude 格式
+ * @param {Object} requestBody - 请求体对象
+ * @param {string} provider - 提供商类型（'openai' 或 'claude'）
+ * @returns {string} 提取到的系统提示词字符串
+ */
+export function extractSystemPromptFromRequestBody(requestBody, provider) {
+    let incomingSystemText = '';
+
+    switch (provider) {
+        case 'openai':
+            const openaiSystemMessage = requestBody.messages?.find(m => m.role === 'system');
+            if (openaiSystemMessage?.content) {
+                incomingSystemText = openaiSystemMessage.content;
+            } else if (requestBody.messages?.length > 0) {
+                // Fallback to first user message if no system message
+                const userMessage = requestBody.messages.find(m => m.role === 'user');
+                if (userMessage) {
+                    incomingSystemText = userMessage.content;
+                }
+            }
+            break;
+
+        case 'claude':
+            if (typeof requestBody.system === 'string') {
+                incomingSystemText = requestBody.system;
+            } else if (typeof requestBody.system === 'object') {
+                incomingSystemText = JSON.stringify(requestBody.system);
+            } else if (requestBody.messages?.length > 0) {
+                // Fallback to first user message if no system property
+                const userMessage = requestBody.messages.find(m => m.role === 'user');
+                if (userMessage) {
+                    if (Array.isArray(userMessage.content)) {
+                        incomingSystemText = userMessage.content.map(block => block.text).join('');
+                    } else {
+                        incomingSystemText = userMessage.content;
+                    }
+                }
+            }
+            break;
+
+        default:
+            console.warn(`[System Prompt] Unknown provider: ${provider}`);
+            break;
+    }
+
+    return incomingSystemText;
+}
+
+/**
+ * 处理错误响应
+ * @param {http.ServerResponse} res - HTTP 响应对象
+ * @param {Error} error - 错误对象
+ */
 export function handleError(res, error) {
     const statusCode = error.response?.status || 500;
     let errorMessage = error.message;
     let suggestions = [];
 
-    // Provide detailed information and suggestions for different error types
+    // 为不同的错误类型提供详细信息和建议
     switch (statusCode) {
         case 401:
             errorMessage = 'Authentication failed. Please check your credentials.';
             suggestions = [
-                'Verify your OAuth credentials are valid',
-                'Try re-authenticating by deleting the credentials file',
-                'Check if your Google Cloud project has the necessary permissions'
+                'Verify your API key is valid',
+                'Check if the API key has the necessary permissions'
             ];
             break;
         case 403:
             errorMessage = 'Access forbidden. Insufficient permissions.';
             suggestions = [
-                'Ensure your Google Cloud project has the Code Assist API enabled',
-                'Check if your account has the necessary permissions',
-                'Verify the project ID is correct'
+                'Ensure your API key has the necessary permissions',
+                'Verify the API endpoint is correct'
             ];
             break;
         case 429:
             errorMessage = 'Too many requests. Rate limit exceeded.';
             suggestions = [
-                'The request has been automatically retried with exponential backoff',
-                'If the issue persists, try reducing the request frequency',
+                'Reduce the request frequency',
                 'Consider upgrading your API quota if available'
             ];
             break;
@@ -751,9 +616,8 @@ export function handleError(res, error) {
         case 504:
             errorMessage = 'Server error occurred. This is usually temporary.';
             suggestions = [
-                'The request has been automatically retried',
-                'If the issue persists, try again in a few minutes',
-                'Check Google Cloud status page for service outages'
+                'Try again in a few minutes',
+                'Check the upstream service status'
             ];
             break;
         default:
@@ -789,78 +653,3 @@ export function handleError(res, error) {
     };
     res.end(JSON.stringify(errorPayload));
 }
-
-/**
- * 从请求体中提取系统提示词。
- * @param {Object} requestBody - 请求体对象。
- * @param {string} provider - 提供商类型（'openai', 'gemini', 'claude'）。
- * @returns {string} 提取到的系统提示词字符串。
- */
-export function extractSystemPromptFromRequestBody(requestBody, provider) {
-    let incomingSystemText = '';
-    switch (provider) {
-        case MODEL_PROTOCOL_PREFIX.OPENAI:
-            const openaiSystemMessage = requestBody.messages?.find(m => m.role === 'system');
-            if (openaiSystemMessage?.content) {
-                incomingSystemText = openaiSystemMessage.content;
-            } else if (requestBody.messages?.length > 0) {
-                // Fallback to first user message if no system message
-                const userMessage = requestBody.messages.find(m => m.role === 'user');
-                if (userMessage) {
-                    incomingSystemText = userMessage.content;
-                }
-            }
-            break;
-        case MODEL_PROTOCOL_PREFIX.GEMINI:
-            const geminiSystemInstruction = requestBody.system_instruction || requestBody.systemInstruction;
-            if (geminiSystemInstruction?.parts) {
-                incomingSystemText = geminiSystemInstruction.parts
-                    .filter(p => p?.text)
-                    .map(p => p.text)
-                    .join('\n');
-            } else if (requestBody.contents?.length > 0) {
-                // Fallback to first user content if no system instruction
-                const userContent = requestBody.contents[0];
-                if (userContent?.parts) {
-                    incomingSystemText = userContent.parts
-                        .filter(p => p?.text)
-                        .map(p => p.text)
-                        .join('\n');
-                }
-            }
-            break;
-        case MODEL_PROTOCOL_PREFIX.CLAUDE:
-            if (typeof requestBody.system === 'string') {
-                incomingSystemText = requestBody.system;
-            } else if (typeof requestBody.system === 'object') {
-                incomingSystemText = JSON.stringify(requestBody.system);
-            } else if (requestBody.messages?.length > 0) {
-                // Fallback to first user message if no system property
-                const userMessage = requestBody.messages.find(m => m.role === 'user');
-                if (userMessage) {
-                    if (Array.isArray(userMessage.content)) {
-                        incomingSystemText = userMessage.content.map(block => block.text).join('');
-                    } else {
-                        incomingSystemText = userMessage.content;
-                    }
-                }
-            }
-            break;
-        default:
-            console.warn(`[System Prompt] Unknown provider: ${provider}`);
-            break;
-    }
-    return incomingSystemText;
-}
-
-/**
- * Generates an MD5 hash for a given object by first converting it to a JSON string.
- * @param {object} obj - The object to hash.
- * @returns {string} The MD5 hash of the object's JSON string representation.
- */
-export function getMD5Hash(obj) {
-    const jsonString = JSON.stringify(obj);
-    return crypto.createHash('md5').update(jsonString).digest('hex');
-}
-
-
